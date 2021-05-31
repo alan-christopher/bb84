@@ -1,0 +1,29 @@
+syntax = "proto3";
+
+package bb84;
+
+option go_package = "generated/bb84pb";
+
+message DenseBitArray {
+	bytes bits = 1;
+	int32 len = 2;
+}
+
+message BasisAnnouncement {
+	// Specifies which bases a sequence of photons was (en|de)coded in.
+	DenseBitArray bases = 1;
+	// Specifies which pulses in a photon-sequence were lost.
+	DenseBitArray dropped = 2;
+}
+
+message BitAnnouncement {
+	// Specifies the values of the bits (en|de)coded on the quantum channel.
+	DenseBitArray bits = 1;
+	// Specifies which entries of the original bits array were sampled.
+	DenseBitArray mask = 2;
+}
+
+message QBERAnnouncement {
+	// The empirically estimated quantum bit error rate.
+	double qber = 1;
+}
