@@ -2,8 +2,6 @@
 // booleans.
 package bitarray
 
-// TODO: good god you need some comments in here boy.
-
 import (
 	"fmt"
 	"math/bits"
@@ -11,6 +9,7 @@ import (
 	"github.com/alan-christopher/bb84/go/generated/bb84pb"
 )
 
+// A Dense is a bit array where every bit is explicitly represented.
 type Dense struct {
 	bits []byte
 	len  int
@@ -20,6 +19,10 @@ type Dense struct {
 
 const blockSize = 8
 
+// NewDense returns a new Dense whose data is a copy of data,
+// and whose length is bitLen. If bitLen is longer than data, then
+// trailing zeros are added. If bitLen is negative, then it is inferred
+// from data.
 func NewDense(data []byte, bitLen int) Dense {
 	if bitLen < 0 {
 		bitLen = len(data) * blockSize
@@ -32,6 +35,7 @@ func NewDense(data []byte, bitLen int) Dense {
 	}
 }
 
+// DenseFromProto converts a DenseBitArray protocol buffer to a Dense.
 func DenseFromProto(dba *bb84pb.DenseBitArray) Dense {
 	return Dense{
 		bits: dba.Bits,
@@ -39,14 +43,17 @@ func DenseFromProto(dba *bb84pb.DenseBitArray) Dense {
 	}
 }
 
+// Size returns the number of bits in d.
 func (d Dense) Size() int {
 	return d.len
 }
 
+// ByteSize returns the number of bytes necessary to represent d.
 func (d Dense) ByteSize() int {
 	return blocksFor(d.len)
 }
 
+// Data returns a copy of the bytes data underlying d.
 func (d Dense) Data() []byte {
 	data := make([]byte, 0, blocksFor(d.len))
 	for i := 0; i < blocksFor(d.len); i++ {
@@ -55,6 +62,9 @@ func (d Dense) Data() []byte {
 	return data
 }
 
+// And computes a bitwise AND operation between d and other. If one of the two
+// is shorter than the other, then trailing 0s are implicitly added to make the
+// sizes match.
 func (d Dense) And(other Dense) Dense {
 	short := other
 	if d.len < other.len {
@@ -70,6 +80,9 @@ func (d Dense) And(other Dense) Dense {
 	return r
 }
 
+// XOr computes a bitwise XOR operation between d and other. If one of the two
+// is shorter than the other, then trailing 0s are implicitly added to make the
+// sizes match.
 func (d Dense) XOr(other Dense) Dense {
 	short, long := other, d
 	if d.len < other.len {
@@ -88,6 +101,9 @@ func (d Dense) XOr(other Dense) Dense {
 	return r
 }
 
+// XNor computes a bitwise equality operation between d and other. If one of the
+// two is shorter than the other, then trailing 0s are implicitly added to make
+// the sizes match.
 func (d Dense) XNor(other Dense) Dense {
 	short, long := other, d
 	if d.len < other.len {
@@ -106,10 +122,13 @@ func (d Dense) XNor(other Dense) Dense {
 	return r
 }
 
+// Not returns a copy of d whose bits have all been flipped.
 func (d Dense) Not() Dense {
 	return d.XNor(Dense{})
 }
 
+// Parity returns the overall parity of d, with true corresponding to 1 and
+// false to 0.
 func (d Dense) Parity() bool {
 	var sum byte
 	for i := 0; i < blocksFor(d.len); i++ {
@@ -118,6 +137,7 @@ func (d Dense) Parity() bool {
 	return bits.OnesCount8(sum)%2 == 1
 }
 
+// CountOnes returns the total number of bits set in d.
 func (d Dense) CountOnes() int {
 	var sum int
 	for i := 0; i < blocksFor(d.len); i++ {
@@ -126,6 +146,8 @@ func (d Dense) CountOnes() int {
 	return sum
 }
 
+// Select selects a subset of bits from d, according to which bits are set in
+// mask.
 func (d Dense) Select(mask Dense) Dense {
 	var r Dense
 	for i := 0; i < d.len; i++ {
@@ -137,6 +159,7 @@ func (d Dense) Select(mask Dense) Dense {
 	return r
 }
 
+// Slice creates a view into d including bits [start, end).
 func (d Dense) Slice(start, end int) (Dense, error) {
 	if end-start > d.len {
 		return Dense{}, fmt.Errorf("slicing bitarray of len %d up to %d", d.len, end-start)
@@ -156,6 +179,7 @@ func (d Dense) Slice(start, end int) (Dense, error) {
 	}, nil
 }
 
+// Get returns the bit at idx.
 func (d Dense) Get(idx int) bool {
 	if idx >= d.len {
 		return false
@@ -166,10 +190,23 @@ func (d Dense) Get(idx int) bool {
 	return 0 < block&(1<<pos)
 }
 
+// ToProto converts d into an equivalent DenseBitArray proto.
 func (d *Dense) ToProto() *bb84pb.DenseBitArray {
 	return &bb84pb.DenseBitArray{
 		Bits: d.bits,
 		Len:  int32(d.len),
+	}
+}
+
+// AppendBit adds a single bit to the end of d.
+func (d *Dense) AppendBit(bit bool) {
+	pos := d.len % blockSize
+	d.len += 1
+	if pos == 0 {
+		d.bits = append(d.bits, 0)
+	}
+	if bit {
+		d.bits[len(d.bits)-1] |= 1 << pos
 	}
 }
 
@@ -185,17 +222,6 @@ func (d *Dense) getByte(i int) byte {
 		overdraw = 0
 	}
 	return r << overdraw >> overdraw
-}
-
-func (d *Dense) AppendBit(bit bool) {
-	pos := d.len % blockSize
-	d.len += 1
-	if pos == 0 {
-		d.bits = append(d.bits, 0)
-	}
-	if bit {
-		d.bits[len(d.bits)-1] |= 1 << pos
-	}
 }
 
 func blocksFor(bits int) int {
