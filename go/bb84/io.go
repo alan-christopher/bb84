@@ -49,13 +49,13 @@ func (p *protoFramer) Read(m proto.Message) error {
 		return err
 	}
 	marshalled := make([]byte, mLen)
-	if err := p.fillBuffer(marshalled); err != nil {
+	if _, err := io.ReadFull(p.rw, marshalled); err != nil {
 		return err
 	}
 	// TODO: avoid magic number
 	// TODO: don't assume byte alignment
 	mac := make([]byte, p.t.m/8)
-	if err := p.fillBuffer(mac); err != nil {
+	if _, err := io.ReadFull(p.rw, mac); err != nil {
 		return err
 	}
 	emac, err := p.buildMAC(marshalled)
@@ -82,19 +82,4 @@ func (p *protoFramer) buildMAC(msg []byte) ([]byte, error) {
 	}
 	mac := hash.XOr(bitarray.NewDense(otp, -1))
 	return mac.Data(), nil
-}
-
-func (p *protoFramer) fillBuffer(buf []byte) error {
-	bufView := buf[:]
-	for len(bufView) > 0 {
-		n, err := p.rw.Read(bufView)
-		bufView = bufView[n:]
-		if len(bufView) == 0 {
-			break
-		}
-		if err != nil {
-			return err
-		}
-	}
-	return nil
 }

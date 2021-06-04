@@ -9,6 +9,11 @@ import (
 	"github.com/alan-christopher/bb84/go/generated/bb84pb"
 )
 
+// TODO: this could be more efficient on many architectures if we used larger
+//   blocks than 8-bit bytes.
+// TODO: Heavy use of copy semantics makes it easy to achieve correctness, but
+//   is fairly wasteful. Add support for in-place operations.
+
 // A Dense is a bit array where every bit is explicitly represented.
 type Dense struct {
 	bits []byte
@@ -33,6 +38,11 @@ func NewDense(data []byte, bitLen int) Dense {
 		bits: bits,
 		len:  bitLen,
 	}
+}
+
+// Empty returns an empty, dense bit array.
+func Empty() Dense {
+	return Dense{}
 }
 
 // DenseFromProto converts a DenseBitArray protocol buffer to a Dense.

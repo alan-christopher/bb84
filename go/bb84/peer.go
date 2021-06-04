@@ -2,54 +2,78 @@ package bb84
 
 import (
 	"fmt"
-	"math/rand"
 
 	"github.com/alan-christopher/bb84/go/bb84/bitarray"
-	"github.com/alan-christopher/bb84/go/bb84/photon"
 	"github.com/alan-christopher/bb84/go/generated/bb84pb"
 )
 
-// TODO: error correction
-// TODO: decoy states
-// TODO: Key Extraction
-// TODO: public constructors for making peers
-
-// An alice represents the BB84 participant responsible for sending photons.
-type alice struct {
-	sideChannel *protoFramer
-	sender      photon.Sender
-	random      *rand.Rand
+// NegotiateKey implements the Peer interface.
+func (a *alice) NegotiateKey(rawByteCount int) ([]byte, float64, error) {
+	bits, bases, err := a.sendQBits(rawByteCount)
+	if err != nil {
+		return nil, 0, err
+	}
+	sifted, err := a.sift(bits, bases)
+	if err != nil {
+		return nil, 0, err
+	}
+	unleaked, qber, err := a.estimateQBER(sifted)
+	// TODO: if unleaked isn't byte-aligned then this returns a key with a few
+	//   predictable zeros on the end. We can either fix that by trimming the
+	//   last, unaligned byte, or by using bitarray.Dense as part of the public
+	//   interface.
+	return unleaked.Data(), qber, nil
 }
 
 // NegotiateKey implements the Peer interface.
-func (a *alice) NegotiateKey(rawByteCount int) ([]byte, float64, error) {
-	// Send a sequence of qbits to Bob.
-	bitArr := make([]byte, rawByteCount)
-	basisArr := make([]byte, rawByteCount)
-	a.random.Read(bitArr)
-	a.random.Read(basisArr)
-	bits := bitarray.NewDense(bitArr, -1)
-	aBasis := bitarray.NewDense(basisArr, -1)
-	if err := a.sender.Send(bits.Data(), aBasis.Data()); err != nil {
+func (b *bob) NegotiateKey(rawByteCount int) ([]byte, float64, error) {
+	bits, bases, dropped, err := b.receiveQBits(rawByteCount)
+	if err != nil {
 		return nil, 0, err
 	}
-
-	// Announce basis choices to Bob
-	aba := &bb84pb.BasisAnnouncement{Bases: aBasis.ToProto()}
-	if err := a.sideChannel.Write(aba); err != nil {
-		return nil, 0, fmt.Errorf("announcing bases: %w", err)
+	sifted, err := b.sift(bits, bases, dropped)
+	if err != nil {
+		return nil, 0, err
 	}
+	unleaked, qber, err := b.estimateQBER(sifted)
+	// TODO: if unleaked isn't byte-aligned then this returns a key with a few
+	//   predictable zeros on the end. We can either fix that by trimming the
+	//   last, unaligned byte, or by using bitarray.Dense as part of the public
+	//   interface.
+	return unleaked.Data(), qber, nil
+}
 
-	// Receive basis choices from Bob, and which pulses were dropped.
+func (a *alice) sendQBits(rbc int) (bits, bases bitarray.Dense, err error) {
+	bitArr := make([]byte, rbc)
+	basisArr := make([]byte, rbc)
+	a.random.Read(bitArr)
+	a.random.Read(basisArr)
+	bits = bitarray.NewDense(bitArr, -1)
+	bases = bitarray.NewDense(basisArr, -1)
+	if err := a.sender.Send(bits.Data(), bases.Data()); err != nil {
+		return bitarray.Empty(), bitarray.Empty(), err
+	}
+	return bits, bases, err
+}
+
+func (a *alice) sift(bits, bases bitarray.Dense) (sifted bitarray.Dense, err error) {
+	aba := &bb84pb.BasisAnnouncement{Bases: bases.ToProto()}
+	if err := a.sideChannel.Write(aba); err != nil {
+		return bitarray.Empty(), fmt.Errorf("announcing bases: %w", err)
+	}
 	bba := new(bb84pb.BasisAnnouncement)
 	if err := a.sideChannel.Read(bba); err != nil {
-		return nil, 0, fmt.Errorf("receiving basis announcement: %w", err)
+		return bitarray.Empty(), fmt.Errorf("receiving basis announcement: %w", err)
 	}
-	bBasis := bitarray.DenseFromProto(bba.Bases)
+	bBases := bitarray.DenseFromProto(bba.Bases)
 	bDropped := bitarray.DenseFromProto(bba.Dropped)
-	sifted := sift(bits, aBasis, bBasis, bDropped)
+	return sift(bits, bases, bBases, bDropped), nil
+}
 
-	// TODO: configurable sampling proportion
+// TODO: support configurable samplign proporation
+// TODO: just send a random seed to bob, then use the same sampling procedure on
+//   either end. Less bandwidth that way.
+func (a *alice) estimateQBER(sifted bitarray.Dense) (unleaked bitarray.Dense, qber float64, err error) {
 	// Announce sampled values
 	buf := make([]byte, sifted.ByteSize())
 	a.random.Read(buf)
@@ -60,59 +84,51 @@ func (a *alice) NegotiateKey(rawByteCount int) ([]byte, float64, error) {
 		Mask: sampleMask.ToProto(),
 	}
 	if err := a.sideChannel.Write(bitsAnnounce); err != nil {
-		return nil, 0, fmt.Errorf("announcing bases: %w", err)
+		return bitarray.Empty(), 0, fmt.Errorf("announcing bases: %w", err)
 	}
 
 	// Receive QBER for sample
 	qa := new(bb84pb.QBERAnnouncement)
 	if err := a.sideChannel.Read(qa); err != nil {
-		return nil, 0, fmt.Errorf("receiving QBER announcement: %w", err)
+		return bitarray.Empty(), 0, fmt.Errorf("receiving QBER announcement: %w", err)
 	}
-	return unsampled.Data(), qa.Qber, nil
+	return unsampled, qa.Qber, nil
 }
 
-// A bob represents the BB84 participant responsible for receiving photons.
-type bob struct {
-	sideChannel *protoFramer
-	receiver    photon.Receiver
-	random      *rand.Rand
-}
-
-// NegotiateKey implements the Peer interface.
-func (b *bob) NegotiateKey(rawByteCount int) ([]byte, float64, error) {
-	// Receive a sequence of qubits from Alice.
-	basisArr := make([]byte, rawByteCount)
+func (b *bob) receiveQBits(rbc int) (bits, bases, dropped bitarray.Dense, err error) {
+	basisArr := make([]byte, rbc)
 	b.random.Read(basisArr)
-	bBasis := bitarray.NewDense(basisArr, -1)
+	bases = bitarray.NewDense(basisArr, -1)
 	bitsArr, droppedArr, err := b.receiver.Receive(basisArr)
-	bits := bitarray.NewDense(bitsArr, -1)
-	dropped := bitarray.NewDense(droppedArr, -1)
+	bits = bitarray.NewDense(bitsArr, -1)
+	dropped = bitarray.NewDense(droppedArr, -1)
 	if err != nil {
-		return nil, 0, fmt.Errorf("receiving qubits: %w", err)
+		return bitarray.Empty(), bitarray.Empty(), bitarray.Empty(), fmt.Errorf("receiving qubits: %w", err)
 	}
+	return bits, bases, dropped, nil
+}
 
-	// Receive basis choices from Alice.
+func (b *bob) sift(bits, bases, dropped bitarray.Dense) (sifted bitarray.Dense, err error) {
 	aba := new(bb84pb.BasisAnnouncement)
 	if err := b.sideChannel.Read(aba); err != nil {
-		return nil, 0, fmt.Errorf("receiving bases: %w", err)
+		return bitarray.Empty(), fmt.Errorf("receiving bases: %w", err)
 	}
-	aBasis := bitarray.DenseFromProto(aba.Bases)
-
-	// Send basis choices to Alice, and which pulses were dropped.
 	bba := &bb84pb.BasisAnnouncement{
-		Bases:   bBasis.ToProto(),
+		Bases:   bases.ToProto(),
 		Dropped: dropped.ToProto(),
 	}
 	if err := b.sideChannel.Write(bba); err != nil {
-		return nil, 0, fmt.Errorf("sending basis announcement: %w", err)
+		return bitarray.Empty(), fmt.Errorf("sending basis announcement: %w", err)
 	}
-	sifted := sift(bits, aBasis, bBasis, dropped)
+	aBasis := bitarray.DenseFromProto(aba.Bases)
+	sifted = sift(bits, bases, aBasis, dropped)
+	return sifted, nil
+}
 
-	// TODO: configurable sampling proportion
-	// Receive sampled values
+func (b *bob) estimateQBER(sifted bitarray.Dense) (unleaked bitarray.Dense, qber float64, err error) {
 	bitsAnnounce := new(bb84pb.BitAnnouncement)
 	if err := b.sideChannel.Read(bitsAnnounce); err != nil {
-		return nil, 0, fmt.Errorf("Receiving sampled bits: %w", err)
+		return bitarray.Empty(), 0, fmt.Errorf("Receiving sampled bits: %w", err)
 	}
 	aSampled := bitarray.DenseFromProto(bitsAnnounce.Bits)
 	sampleMask := bitarray.DenseFromProto(bitsAnnounce.Mask)
@@ -120,13 +136,12 @@ func (b *bob) NegotiateKey(rawByteCount int) ([]byte, float64, error) {
 
 	// Calculate and announce sampled QBER
 	errors := aSampled.XOr(bSampled).CountOnes()
-	qber := float64(errors) / float64(aSampled.Size())
+	qber = float64(errors) / float64(aSampled.Size())
 	qa := &bb84pb.QBERAnnouncement{Qber: qber}
 	if err := b.sideChannel.Write(qa); err != nil {
-		return nil, 0, fmt.Errorf("receiving QBER announcement: %w", err)
+		return bitarray.Empty(), 0, fmt.Errorf("receiving QBER announcement: %w", err)
 	}
-
-	return unsampled.Data(), qber, nil
+	return unsampled, qber, nil
 }
 
 func sift(bits, sendBasis, receiveBasis, dropped bitarray.Dense) bitarray.Dense {
