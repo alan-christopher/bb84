@@ -19,7 +19,7 @@ func TestToeplitzMul(t *testing.T) {
 			// (0 0 1)
 			// (1 0 0)
 			mat: toeplitz{
-				diags: bitarray.NewDense([]byte{0b10010}, 5),
+				diags: bitarray.NewDense([]byte{0b01001}, 5),
 				m:     3,
 				n:     3,
 			},
@@ -33,7 +33,7 @@ func TestToeplitzMul(t *testing.T) {
 			// (0 1)
 			// (1 0)
 			mat: toeplitz{
-				diags: bitarray.NewDense([]byte{0b10010}, 5),
+				diags: bitarray.NewDense([]byte{0b00101}, 5),
 				m:     4,
 				n:     2,
 			},
@@ -66,7 +66,7 @@ func TestToeplitzMul(t *testing.T) {
 				t.Errorf("got bitarray of len %d, want %d", out.Size(), tc.eout.Size())
 			}
 			outArr := out.Data()
-			eoutArr := out.Data()
+			eoutArr := tc.eout.Data()
 			if !bytes.Equal(outArr, eoutArr) {
 				t.Errorf("T*v == %v, want %v", outArr, eoutArr)
 			}
