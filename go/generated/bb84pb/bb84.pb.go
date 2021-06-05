@@ -237,6 +237,106 @@ func (x *QBERAnnouncement) GetQber() float64 {
 	return 0
 }
 
+type ParityAnnouncement struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	// The total parities of each of the code blocks which comprise the key
+	// being negotiated.
+	Parities *DenseBitArray `protobuf:"bytes,1,opt,name=Parities,json=parities,proto3" json:"Parities,omitempty"`
+}
+
+func (x *ParityAnnouncement) Reset() {
+	*x = ParityAnnouncement{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_proto_bb84_proto_msgTypes[4]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *ParityAnnouncement) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ParityAnnouncement) ProtoMessage() {}
+
+func (x *ParityAnnouncement) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_bb84_proto_msgTypes[4]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ParityAnnouncement.ProtoReflect.Descriptor instead.
+func (*ParityAnnouncement) Descriptor() ([]byte, []int) {
+	return file_proto_bb84_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *ParityAnnouncement) GetParities() *DenseBitArray {
+	if x != nil {
+		return x.Parities
+	}
+	return nil
+}
+
+type SyndromeAnnouncement struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	// The syndromes of the code blocks which comprise the key being negotiated.
+	// Note that some reconciliation protocols, e.g. Winnow, will only send
+	// syndromes for some of its code blocks, and which ones will be present
+	// must be inferred from a previous computational stage.
+	Syndromes []*DenseBitArray `protobuf:"bytes,1,rep,name=syndromes,proto3" json:"syndromes,omitempty"`
+}
+
+func (x *SyndromeAnnouncement) Reset() {
+	*x = SyndromeAnnouncement{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_proto_bb84_proto_msgTypes[5]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *SyndromeAnnouncement) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SyndromeAnnouncement) ProtoMessage() {}
+
+func (x *SyndromeAnnouncement) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_bb84_proto_msgTypes[5]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SyndromeAnnouncement.ProtoReflect.Descriptor instead.
+func (*SyndromeAnnouncement) Descriptor() ([]byte, []int) {
+	return file_proto_bb84_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *SyndromeAnnouncement) GetSyndromes() []*DenseBitArray {
+	if x != nil {
+		return x.Syndromes
+	}
+	return nil
+}
+
 var File_proto_bb84_proto protoreflect.FileDescriptor
 
 var file_proto_bb84_proto_rawDesc = []byte{
@@ -260,9 +360,18 @@ var file_proto_bb84_proto_rawDesc = []byte{
 	0x44, 0x65, 0x6e, 0x73, 0x65, 0x42, 0x69, 0x74, 0x41, 0x72, 0x72, 0x61, 0x79, 0x52, 0x04, 0x6d,
 	0x61, 0x73, 0x6b, 0x22, 0x26, 0x0a, 0x10, 0x51, 0x42, 0x45, 0x52, 0x41, 0x6e, 0x6e, 0x6f, 0x75,
 	0x6e, 0x63, 0x65, 0x6d, 0x65, 0x6e, 0x74, 0x12, 0x12, 0x0a, 0x04, 0x71, 0x62, 0x65, 0x72, 0x18,
-	0x01, 0x20, 0x01, 0x28, 0x01, 0x52, 0x04, 0x71, 0x62, 0x65, 0x72, 0x42, 0x12, 0x5a, 0x10, 0x67,
-	0x65, 0x6e, 0x65, 0x72, 0x61, 0x74, 0x65, 0x64, 0x2f, 0x62, 0x62, 0x38, 0x34, 0x70, 0x62, 0x62,
-	0x06, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x33,
+	0x01, 0x20, 0x01, 0x28, 0x01, 0x52, 0x04, 0x71, 0x62, 0x65, 0x72, 0x22, 0x45, 0x0a, 0x12, 0x50,
+	0x61, 0x72, 0x69, 0x74, 0x79, 0x41, 0x6e, 0x6e, 0x6f, 0x75, 0x6e, 0x63, 0x65, 0x6d, 0x65, 0x6e,
+	0x74, 0x12, 0x2f, 0x0a, 0x08, 0x50, 0x61, 0x72, 0x69, 0x74, 0x69, 0x65, 0x73, 0x18, 0x01, 0x20,
+	0x01, 0x28, 0x0b, 0x32, 0x13, 0x2e, 0x62, 0x62, 0x38, 0x34, 0x2e, 0x44, 0x65, 0x6e, 0x73, 0x65,
+	0x42, 0x69, 0x74, 0x41, 0x72, 0x72, 0x61, 0x79, 0x52, 0x08, 0x70, 0x61, 0x72, 0x69, 0x74, 0x69,
+	0x65, 0x73, 0x22, 0x49, 0x0a, 0x14, 0x53, 0x79, 0x6e, 0x64, 0x72, 0x6f, 0x6d, 0x65, 0x41, 0x6e,
+	0x6e, 0x6f, 0x75, 0x6e, 0x63, 0x65, 0x6d, 0x65, 0x6e, 0x74, 0x12, 0x31, 0x0a, 0x09, 0x73, 0x79,
+	0x6e, 0x64, 0x72, 0x6f, 0x6d, 0x65, 0x73, 0x18, 0x01, 0x20, 0x03, 0x28, 0x0b, 0x32, 0x13, 0x2e,
+	0x62, 0x62, 0x38, 0x34, 0x2e, 0x44, 0x65, 0x6e, 0x73, 0x65, 0x42, 0x69, 0x74, 0x41, 0x72, 0x72,
+	0x61, 0x79, 0x52, 0x09, 0x73, 0x79, 0x6e, 0x64, 0x72, 0x6f, 0x6d, 0x65, 0x73, 0x42, 0x12, 0x5a,
+	0x10, 0x67, 0x65, 0x6e, 0x65, 0x72, 0x61, 0x74, 0x65, 0x64, 0x2f, 0x62, 0x62, 0x38, 0x34, 0x70,
+	0x62, 0x62, 0x06, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x33,
 }
 
 var (
@@ -277,23 +386,27 @@ func file_proto_bb84_proto_rawDescGZIP() []byte {
 	return file_proto_bb84_proto_rawDescData
 }
 
-var file_proto_bb84_proto_msgTypes = make([]protoimpl.MessageInfo, 4)
+var file_proto_bb84_proto_msgTypes = make([]protoimpl.MessageInfo, 6)
 var file_proto_bb84_proto_goTypes = []interface{}{
-	(*DenseBitArray)(nil),     // 0: bb84.DenseBitArray
-	(*BasisAnnouncement)(nil), // 1: bb84.BasisAnnouncement
-	(*BitAnnouncement)(nil),   // 2: bb84.BitAnnouncement
-	(*QBERAnnouncement)(nil),  // 3: bb84.QBERAnnouncement
+	(*DenseBitArray)(nil),        // 0: bb84.DenseBitArray
+	(*BasisAnnouncement)(nil),    // 1: bb84.BasisAnnouncement
+	(*BitAnnouncement)(nil),      // 2: bb84.BitAnnouncement
+	(*QBERAnnouncement)(nil),     // 3: bb84.QBERAnnouncement
+	(*ParityAnnouncement)(nil),   // 4: bb84.ParityAnnouncement
+	(*SyndromeAnnouncement)(nil), // 5: bb84.SyndromeAnnouncement
 }
 var file_proto_bb84_proto_depIdxs = []int32{
 	0, // 0: bb84.BasisAnnouncement.bases:type_name -> bb84.DenseBitArray
 	0, // 1: bb84.BasisAnnouncement.dropped:type_name -> bb84.DenseBitArray
 	0, // 2: bb84.BitAnnouncement.bits:type_name -> bb84.DenseBitArray
 	0, // 3: bb84.BitAnnouncement.mask:type_name -> bb84.DenseBitArray
-	4, // [4:4] is the sub-list for method output_type
-	4, // [4:4] is the sub-list for method input_type
-	4, // [4:4] is the sub-list for extension type_name
-	4, // [4:4] is the sub-list for extension extendee
-	0, // [0:4] is the sub-list for field type_name
+	0, // 4: bb84.ParityAnnouncement.Parities:type_name -> bb84.DenseBitArray
+	0, // 5: bb84.SyndromeAnnouncement.syndromes:type_name -> bb84.DenseBitArray
+	6, // [6:6] is the sub-list for method output_type
+	6, // [6:6] is the sub-list for method input_type
+	6, // [6:6] is the sub-list for extension type_name
+	6, // [6:6] is the sub-list for extension extendee
+	0, // [0:6] is the sub-list for field type_name
 }
 
 func init() { file_proto_bb84_proto_init() }
@@ -350,6 +463,30 @@ func file_proto_bb84_proto_init() {
 				return nil
 			}
 		}
+		file_proto_bb84_proto_msgTypes[4].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*ParityAnnouncement); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_proto_bb84_proto_msgTypes[5].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*SyndromeAnnouncement); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
@@ -357,7 +494,7 @@ func file_proto_bb84_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: file_proto_bb84_proto_rawDesc,
 			NumEnums:      0,
-			NumMessages:   4,
+			NumMessages:   6,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

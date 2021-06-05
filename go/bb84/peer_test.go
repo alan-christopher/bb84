@@ -18,40 +18,61 @@ type negotiationResult struct {
 	err  error
 }
 
-func TestNoiselessNegotation(t *testing.T) {
+func TestWinnowedNegotation(t *testing.T) {
 	l, r := net.Pipe()
 	sender, receiver := photon.NewSimulatedChannel(0)
-	otp := make([]byte, 1024)
+	otp := make([]byte, 4<<10)
 	rand.Read(otp)
-	diags := make([]byte, 1024)
+	diags := make([]byte, 1<<20)
 	rand.Read(diags)
+	aWire := &protoFramer{
+		rw:     l,
+		secret: bytes.NewBuffer(otp),
+		t:      toeplitz{diags: bitarray.NewDense(diags, -1), m: 40},
+	}
+	bWire := &protoFramer{
+		rw:     r,
+		secret: bytes.NewBuffer(otp),
+		t:      toeplitz{diags: bitarray.NewDense(diags, -1), m: 40},
+	}
 	a := alice{
-		sideChannel: &protoFramer{
-			rw:     l,
-			secret: bytes.NewBuffer(otp),
-			t:      toeplitz{diags: bitarray.NewDense(diags, -1), m: 40},
+		sideChannel: aWire,
+		sender:      sender,
+		random:      rand.New(rand.NewSource(42)),
+		reconciler: winnower{
+			channel: aWire,
+			isBob:   false,
+			rand:    rand.New(rand.NewSource(17)),
+			iters:   []int{3, 3, 3, 4, 6, 7, 7, 7},
 		},
-		sender: sender,
-		random: rand.New(rand.NewSource(42)),
 	}
 	b := bob{
-		sideChannel: &protoFramer{
-			rw:     r,
-			secret: bytes.NewBuffer(otp),
-			t:      toeplitz{diags: bitarray.NewDense(diags, -1), m: 40},
+		sideChannel: bWire,
+		receiver:    receiver,
+		random:      rand.New(rand.NewSource(1337)),
+		reconciler: winnower{
+			channel: bWire,
+			isBob:   true,
+			rand:    rand.New(rand.NewSource(17)),
+			iters:   []int{3, 3, 3, 4, 6, 7, 7, 7},
 		},
-		receiver: receiver,
-		random:   rand.New(rand.NewSource(1337)),
 	}
+	const qBytes = 4 << 10
+	legitErrs := bitarray.NewDense(nil, qBytes)
+	for i := 0; i < qBytes*8/20; i++ {
+		legitErrs.Set(i, true)
+	}
+	legitErrs.Shuffle(rand.New(rand.NewSource(99)))
+	receiver.Errors = legitErrs.Data()
 
 	aResCh := make(chan negotiationResult, 1)
 	bResCh := make(chan negotiationResult, 1)
 	go func() {
-		k, qber, err := a.NegotiateKey(4)
+		k, qber, err := a.NegotiateKey(qBytes)
 		aResCh <- negotiationResult{k, qber, err}
 	}()
 	go func() {
-		k, qber, err := b.NegotiateKey(4)
+		k, qber, err := b.NegotiateKey(qBytes)
 		bResCh <- negotiationResult{k, qber, err}
 	}()
 
@@ -74,9 +95,6 @@ func TestNoiselessNegotation(t *testing.T) {
 	}
 	if bRes.err != nil {
 		t.Fatalf("Bob error: %v", bRes.err)
-	}
-	if aRes.qber != 0 || bRes.qber != 0 {
-		t.Errorf("Expected 0 QBER from (alice, bob), got (%f, %f)", aRes.qber, bRes.qber)
 	}
 	if !bytes.Equal(aRes.key, bRes.key) {
 		t.Errorf("Alice and Bob disagree on keys: (%b, %b)", aRes.key, bRes.key)

@@ -5,6 +5,7 @@ package bitarray
 import (
 	"fmt"
 	"math/bits"
+	"math/rand"
 
 	"github.com/alan-christopher/bb84/go/generated/bb84pb"
 )
@@ -86,6 +87,27 @@ func (d Dense) And(other Dense) Dense {
 	}
 	for i := range short.bits {
 		r.bits = append(r.bits, d.getByte(i)&other.getByte(i))
+	}
+	return r
+}
+
+// Or computes a bitwise OR operation between d and other. If one of the two
+// is shorter than the other, then trailing 0s are implicitly added to make the
+// sizes match.
+func (d Dense) Or(other Dense) Dense {
+	short, long := other, d
+	if d.len < other.len {
+		short, long = d, other
+	}
+	r := Dense{
+		bits: make([]byte, 0, blocksFor(long.len)),
+		len:  long.len,
+	}
+	for i := range short.bits {
+		r.bits = append(r.bits, short.getByte(i)|long.getByte(i))
+	}
+	for j := len(short.bits); j < len(long.bits); j++ {
+		r.bits = append(r.bits, long.getByte(j)) // 0|v == v
 	}
 	return r
 }
@@ -200,6 +222,21 @@ func (d Dense) Get(idx int) bool {
 	return 0 < block&(1<<pos)
 }
 
+// Set sets the bit at idx.
+func (d Dense) Set(idx int, v bool) error {
+	if idx >= d.len {
+		return fmt.Errorf("index out of range: %d >= %d", idx, d.len)
+	}
+	idx = idx + d.offset
+	pos := idx % blockSize
+	if v {
+		d.bits[idx/blockSize] |= 1 << pos
+	} else {
+		d.bits[idx/blockSize] &= ^(1 << pos)
+	}
+	return nil
+}
+
 // ToProto converts d into an equivalent DenseBitArray proto.
 func (d *Dense) ToProto() *bb84pb.DenseBitArray {
 	return &bb84pb.DenseBitArray{
@@ -218,6 +255,15 @@ func (d *Dense) AppendBit(bit bool) {
 	if bit {
 		d.bits[len(d.bits)-1] |= 1 << pos
 	}
+}
+
+// Shuffle randomly permutes the bits in d, using r for RNG.
+func (d *Dense) Shuffle(r *rand.Rand) {
+	r.Shuffle(d.len, func(i, j int) {
+		a, b := d.Get(i), d.Get(j)
+		d.Set(i, b)
+		d.Set(j, a)
+	})
 }
 
 func (d *Dense) getByte(i int) byte {

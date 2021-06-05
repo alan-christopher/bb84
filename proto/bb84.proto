@@ -27,3 +27,18 @@ message QBERAnnouncement {
 	// The empirically estimated quantum bit error rate.
 	double qber = 1;
 }
+
+
+message ParityAnnouncement {
+	// The total parities of each of the code blocks which comprise the key
+	// being negotiated.
+	DenseBitArray Parities = 1;
+}
+
+message SyndromeAnnouncement {
+	// The syndromes of the code blocks which comprise the key being negotiated.
+	// Note that some reconciliation protocols, e.g. Winnow, will only send
+	// syndromes for some of its code blocks, and which ones will be present
+	// must be inferred from a previous computational stage.
+	repeated DenseBitArray syndromes = 1;
+}
