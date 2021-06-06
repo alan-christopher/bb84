@@ -337,6 +337,54 @@ func (x *SyndromeAnnouncement) GetSyndromes() []*DenseBitArray {
 	return nil
 }
 
+type SeedAnnouncement struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	// A randomly generated seed for use in, e.g., randomness extraction.
+	Seed []byte `protobuf:"bytes,1,opt,name=seed,proto3" json:"seed,omitempty"`
+}
+
+func (x *SeedAnnouncement) Reset() {
+	*x = SeedAnnouncement{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_proto_bb84_proto_msgTypes[6]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *SeedAnnouncement) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SeedAnnouncement) ProtoMessage() {}
+
+func (x *SeedAnnouncement) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_bb84_proto_msgTypes[6]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SeedAnnouncement.ProtoReflect.Descriptor instead.
+func (*SeedAnnouncement) Descriptor() ([]byte, []int) {
+	return file_proto_bb84_proto_rawDescGZIP(), []int{6}
+}
+
+func (x *SeedAnnouncement) GetSeed() []byte {
+	if x != nil {
+		return x.Seed
+	}
+	return nil
+}
+
 var File_proto_bb84_proto protoreflect.FileDescriptor
 
 var file_proto_bb84_proto_rawDesc = []byte{
@@ -369,9 +417,12 @@ var file_proto_bb84_proto_rawDesc = []byte{
 	0x6e, 0x6f, 0x75, 0x6e, 0x63, 0x65, 0x6d, 0x65, 0x6e, 0x74, 0x12, 0x31, 0x0a, 0x09, 0x73, 0x79,
 	0x6e, 0x64, 0x72, 0x6f, 0x6d, 0x65, 0x73, 0x18, 0x01, 0x20, 0x03, 0x28, 0x0b, 0x32, 0x13, 0x2e,
 	0x62, 0x62, 0x38, 0x34, 0x2e, 0x44, 0x65, 0x6e, 0x73, 0x65, 0x42, 0x69, 0x74, 0x41, 0x72, 0x72,
-	0x61, 0x79, 0x52, 0x09, 0x73, 0x79, 0x6e, 0x64, 0x72, 0x6f, 0x6d, 0x65, 0x73, 0x42, 0x12, 0x5a,
-	0x10, 0x67, 0x65, 0x6e, 0x65, 0x72, 0x61, 0x74, 0x65, 0x64, 0x2f, 0x62, 0x62, 0x38, 0x34, 0x70,
-	0x62, 0x62, 0x06, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x33,
+	0x61, 0x79, 0x52, 0x09, 0x73, 0x79, 0x6e, 0x64, 0x72, 0x6f, 0x6d, 0x65, 0x73, 0x22, 0x26, 0x0a,
+	0x10, 0x53, 0x65, 0x65, 0x64, 0x41, 0x6e, 0x6e, 0x6f, 0x75, 0x6e, 0x63, 0x65, 0x6d, 0x65, 0x6e,
+	0x74, 0x12, 0x12, 0x0a, 0x04, 0x73, 0x65, 0x65, 0x64, 0x18, 0x01, 0x20, 0x01, 0x28, 0x0c, 0x52,
+	0x04, 0x73, 0x65, 0x65, 0x64, 0x42, 0x12, 0x5a, 0x10, 0x67, 0x65, 0x6e, 0x65, 0x72, 0x61, 0x74,
+	0x65, 0x64, 0x2f, 0x62, 0x62, 0x38, 0x34, 0x70, 0x62, 0x62, 0x06, 0x70, 0x72, 0x6f, 0x74, 0x6f,
+	0x33,
 }
 
 var (
@@ -386,7 +437,7 @@ func file_proto_bb84_proto_rawDescGZIP() []byte {
 	return file_proto_bb84_proto_rawDescData
 }
 
-var file_proto_bb84_proto_msgTypes = make([]protoimpl.MessageInfo, 6)
+var file_proto_bb84_proto_msgTypes = make([]protoimpl.MessageInfo, 7)
 var file_proto_bb84_proto_goTypes = []interface{}{
 	(*DenseBitArray)(nil),        // 0: bb84.DenseBitArray
 	(*BasisAnnouncement)(nil),    // 1: bb84.BasisAnnouncement
@@ -394,6 +445,7 @@ var file_proto_bb84_proto_goTypes = []interface{}{
 	(*QBERAnnouncement)(nil),     // 3: bb84.QBERAnnouncement
 	(*ParityAnnouncement)(nil),   // 4: bb84.ParityAnnouncement
 	(*SyndromeAnnouncement)(nil), // 5: bb84.SyndromeAnnouncement
+	(*SeedAnnouncement)(nil),     // 6: bb84.SeedAnnouncement
 }
 var file_proto_bb84_proto_depIdxs = []int32{
 	0, // 0: bb84.BasisAnnouncement.bases:type_name -> bb84.DenseBitArray
@@ -487,6 +539,18 @@ func file_proto_bb84_proto_init() {
 				return nil
 			}
 		}
+		file_proto_bb84_proto_msgTypes[6].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*SeedAnnouncement); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
@@ -494,7 +558,7 @@ func file_proto_bb84_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: file_proto_bb84_proto_rawDesc,
 			NumEnums:      0,
-			NumMessages:   6,
+			NumMessages:   7,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

@@ -13,7 +13,7 @@ import (
 // A convenience struct for pumping the return values from NegotiateKey into a
 // channel.
 type negotiationResult struct {
-	key  []byte
+	key  bitarray.Dense
 	qber float64
 	err  error
 }
@@ -96,13 +96,16 @@ func TestWinnowedNegotation(t *testing.T) {
 	if bRes.err != nil {
 		t.Fatalf("Bob error: %v", bRes.err)
 	}
-	if !bytes.Equal(aRes.key, bRes.key) {
+	if !bytes.Equal(aRes.key.Data(), bRes.key.Data()) {
 		t.Errorf("Alice and Bob disagree on keys: (%b, %b)", aRes.key, bRes.key)
 	}
-	if len(aRes.key) == 0 {
+	if aRes.key.Size() != bRes.key.Size() {
+		t.Errorf("Alice and Bob have different key lengths: %d != %d", aRes.key.Size(), bRes.key.Size())
+	}
+	if aRes.key.Size() == 0 {
 		t.Errorf("Alice arrived at an empty key")
 	}
-	if len(bRes.key) == 0 {
+	if bRes.key.Size() == 0 {
 		t.Errorf("Bob arrived at an empty key")
 	}
 }

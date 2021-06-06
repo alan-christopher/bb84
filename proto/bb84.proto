@@ -42,3 +42,8 @@ message SyndromeAnnouncement {
 	// must be inferred from a previous computational stage.
 	repeated DenseBitArray syndromes = 1;
 }
+
+message SeedAnnouncement {
+	// A randomly generated seed for use in, e.g., randomness extraction.
+	bytes seed = 1;
+}

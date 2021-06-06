@@ -280,6 +280,10 @@ func (d *Dense) getByte(i int) byte {
 	return r << overdraw >> overdraw
 }
 
+func BytesFor(bits int) int {
+	return (bits + 8 - 1) / 8
+}
+
 func blocksFor(bits int) int {
 	return (bits + blockSize - 1) / blockSize
 }

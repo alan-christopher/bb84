@@ -9,10 +9,8 @@ import (
 	"github.com/alan-christopher/bb84/go/bb84/photon"
 )
 
-// TODO: can you condense this interface down to a single Reconcile method? Is
-// there any advantage to that past aesthetics?
 type Peer interface {
-	NegotiateKey(rawByteCount int) ([]byte, float64, error)
+	NegotiateKey(rawByteCount int) (bitarray.Dense, float64, error)
 }
 
 type reconcileResult struct {
@@ -29,9 +27,6 @@ type reconciler interface {
 	Reconcile(x bitarray.Dense) (reconcileResult, error)
 }
 
-// TODO: error correction
-// TODO: decoy states
-// TODO: Key Extraction
 // TODO: public constructors for making peers
 
 // An alice represents the first BB84 participant.

@@ -2,65 +2,76 @@ package bb84
 
 import (
 	"fmt"
+	"math"
 
 	"github.com/alan-christopher/bb84/go/bb84/bitarray"
 	"github.com/alan-christopher/bb84/go/generated/bb84pb"
 )
 
 // NegotiateKey implements the Peer interface.
-func (a *alice) NegotiateKey(rawByteCount int) ([]byte, float64, error) {
+func (a *alice) NegotiateKey(rawByteCount int) (bitarray.Dense, float64, error) {
 	bits, bases, err := a.sendQBits(rawByteCount)
 	if err != nil {
-		return nil, 0, err
+		return bitarray.Empty(), 0, err
 	}
 	sifted, err := a.sift(bits, bases)
 	if err != nil {
-		return nil, 0, err
+		return bitarray.Empty(), 0, err
 	}
 	unleaked, qber, err := a.estimateQBER(sifted)
 	if err != nil {
-		return nil, 0, err
+		return bitarray.Empty(), 0, err
 	}
 	recRes, err := a.reconciler.Reconcile(unleaked)
 	if err != nil {
-		return nil, 0, err
+		return bitarray.Empty(), 0, err
 	}
-	// TODO: calculate possible bit leakage from sifting phase
-	// TODO: extract key
-	//   see https://link.springer.com/article/10.1007/BF00191318 for the number
-	//   of bits to eat.
-	// TODO: if unleaked isn't byte-aligned then this returns a key with a few
-	//   predictable zeros on the end. We can either fix that by trimming the
-	//   last, unaligned byte, or by using bitarray.Dense as part of the public
-	//   interface.
-	return recRes.xHat.Data(), qber, nil
+	if recRes.qber != 0 {
+		qber = recRes.qber
+	}
+	bitsLeaked := recRes.bitLeakage + calcMaxEveInfo(qber, sifted.Size())
+	seed, err := a.sendSeed(recRes.xHat.Size(), bitsLeaked)
+	if err != nil {
+		return bitarray.Empty(), 0, err
+	}
+	k, err := extractKey(seed, recRes.xHat, bitsLeaked)
+	if err != nil {
+		return bitarray.Empty(), 0, err
+	}
+	return k, qber, nil
 }
 
 // NegotiateKey implements the Peer interface.
-func (b *bob) NegotiateKey(rawByteCount int) ([]byte, float64, error) {
+func (b *bob) NegotiateKey(rawByteCount int) (bitarray.Dense, float64, error) {
 	bits, bases, dropped, err := b.receiveQBits(rawByteCount)
 	if err != nil {
-		return nil, 0, err
+		return bitarray.Empty(), 0, err
 	}
 	sifted, err := b.sift(bits, bases, dropped)
 	if err != nil {
-		return nil, 0, err
+		return bitarray.Empty(), 0, err
 	}
 	unleaked, qber, err := b.estimateQBER(sifted)
 	if err != nil {
-		return nil, 0, err
+		return bitarray.Empty(), 0, err
 	}
 	recRes, err := b.reconciler.Reconcile(unleaked)
 	if err != nil {
-		return nil, 0, err
+		return bitarray.Empty(), 0, err
 	}
-	// TODO: calculate possible bit leakage from sifting phase
-	// TODO: extract key
-	// TODO: if unleaked isn't byte-aligned then this returns a key with a few
-	//   predictable zeros on the end. We can either fix that by trimming the
-	//   last, unaligned byte, or by using bitarray.Dense as part of the public
-	//   interface.
-	return recRes.xHat.Data(), qber, nil
+	if recRes.qber != 0 {
+		qber = recRes.qber
+	}
+	bitsLeaked := recRes.bitLeakage + calcMaxEveInfo(qber, sifted.Size())
+	seed, err := b.receiveSeed()
+	if err != nil {
+		return bitarray.Empty(), 0, err
+	}
+	k, err := extractKey(seed, recRes.xHat, bitsLeaked)
+	if err != nil {
+		return bitarray.Empty(), 0, err
+	}
+	return k, qber, nil
 }
 
 func (a *alice) sendQBits(rbc int) (bits, bases bitarray.Dense, err error) {
@@ -119,7 +130,7 @@ func (b *bob) sift(bits, bases, dropped bitarray.Dense) (sifted bitarray.Dense, 
 	return sift(bits, bases, aBasis, dropped), nil
 }
 
-// TODO: support configurable sampling proporation
+// TODO: support configurable sampling proportion
 // TODO: just send a random seed to bob, then use the same sampling procedure on
 //   both ends. Less bandwidth that way.
 func (a *alice) estimateQBER(sifted bitarray.Dense) (unleaked bitarray.Dense, qber float64, err error) {
@@ -163,6 +174,35 @@ func (b *bob) estimateQBER(sifted bitarray.Dense) (unleaked bitarray.Dense, qber
 	return unsampled, qber, nil
 }
 
+func (a *alice) sendSeed(bitCount, leakage int) (bitarray.Dense, error) {
+	needed := bitCount + (bitCount - leakage) - 1
+	seed := make([]byte, bitarray.BytesFor(needed))
+	a.random.Read(seed)
+	if err := a.sideChannel.Write(&bb84pb.SeedAnnouncement{Seed: seed}); err != nil {
+		return bitarray.Empty(), err
+	}
+	return bitarray.NewDense(seed, -1), nil
+}
+
+func (b *bob) receiveSeed() (bitarray.Dense, error) {
+	m := &bb84pb.SeedAnnouncement{}
+	if err := b.sideChannel.Read(m); err != nil {
+		return bitarray.Empty(), err
+	}
+	return bitarray.NewDense(m.Seed, -1), nil
+}
+
+// calcMaxEveInfo returns a theoretical bound on the number of bits of
+// information that Eve could have discerned from a quantum communication
+// consisting of n qbits for which an error rate of qber was observed.
+//
+// See also, https://link.springer.com/article/10.1007/BF00191318
+func calcMaxEveInfo(qber float64, n int) int {
+	// TODO: this doesn't account for qber's precision. It really needs to.
+	leakRate := 2 * math.Sqrt(2) * qber
+	return int(math.Ceil(leakRate * float64(n)))
+}
+
 func sift(bits, sendBasis, receiveBasis, dropped bitarray.Dense) bitarray.Dense {
 	siftMask := sendBasis.XNor(receiveBasis)
 	if dropped.Size() > 0 {
@@ -173,4 +213,13 @@ func sift(bits, sendBasis, receiveBasis, dropped bitarray.Dense) bitarray.Dense 
 
 func partition(bits, mask bitarray.Dense) (masked, unmasked bitarray.Dense) {
 	return bits.Select(mask), bits.Select(mask.Not())
+}
+
+func extractKey(seed, x bitarray.Dense, bitsLeaked int) (bitarray.Dense, error) {
+	t := toeplitz{
+		diags: seed,
+		m:     x.Size() - bitsLeaked,
+		n:     x.Size(),
+	}
+	return t.Mul(x)
 }
