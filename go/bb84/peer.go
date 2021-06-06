@@ -26,9 +26,6 @@ func (a *alice) NegotiateKey(rawByteCount int) (bitarray.Dense, float64, error) 
 	if err != nil {
 		return bitarray.Empty(), 0, err
 	}
-	if recRes.qber != 0 {
-		qber = recRes.qber
-	}
 	bitsLeaked := recRes.bitLeakage + calcMaxEveInfo(qber, sifted.Size())
 	seed, err := a.sendSeed(recRes.xHat.Size(), bitsLeaked)
 	if err != nil {
@@ -58,9 +55,6 @@ func (b *bob) NegotiateKey(rawByteCount int) (bitarray.Dense, float64, error) {
 	recRes, err := b.reconciler.Reconcile(unleaked)
 	if err != nil {
 		return bitarray.Empty(), 0, err
-	}
-	if recRes.qber != 0 {
-		qber = recRes.qber
 	}
 	bitsLeaked := recRes.bitLeakage + calcMaxEveInfo(qber, sifted.Size())
 	seed, err := b.receiveSeed()
