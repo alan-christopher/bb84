@@ -191,6 +191,7 @@ func (d Dense) Select(mask Dense) Dense {
 	return r
 }
 
+// TODO: pretty sure this doesn't handle slice-of-slice correctly.
 // Slice creates a view into d including bits [start, end).
 func (d Dense) Slice(start, end int) (Dense, error) {
 	if end-start > d.len {
@@ -240,21 +241,26 @@ func (d Dense) Set(idx int, v bool) error {
 // ToProto converts d into an equivalent DenseBitArray proto.
 func (d *Dense) ToProto() *bb84pb.DenseBitArray {
 	return &bb84pb.DenseBitArray{
-		Bits: d.bits,
+		Bits: d.Data(),
 		Len:  int32(d.len),
 	}
 }
 
 // AppendBit adds a single bit to the end of d.
 func (d *Dense) AppendBit(bit bool) {
-	pos := d.len % blockSize
+	pos := (d.len + d.offset) % blockSize
 	d.len += 1
 	if pos == 0 {
 		d.bits = append(d.bits, 0)
 	}
-	if bit {
-		d.bits[len(d.bits)-1] |= 1 << pos
-	}
+	d.Set(d.len-1, bit)
+}
+
+// Shuffled returns a randomly permuted copy of d.
+func (d Dense) Shuffled(r *rand.Rand) Dense {
+	ret := NewDense(d.bits, d.len)
+	ret.Shuffle(r)
+	return ret
 }
 
 // Shuffle randomly permutes the bits in d, using r for RNG.

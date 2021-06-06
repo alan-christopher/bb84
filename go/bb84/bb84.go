@@ -121,8 +121,12 @@ func NewPeer(opts PeerOpts) (Peer, error) {
 	if epsPriv == 0 {
 		epsPriv = DefaultEpsilon
 	}
+	sampleProp := opts.SampleProportion
+	if sampleProp == 0 {
+		sampleProp = DefaultSampleProportion
+	}
 
-	diags := make([]byte, 2*qBytes-1024) // DO NOT SUBMIT
+	diags := make([]byte, 2*qBytes+8)
 	if _, err := io.ReadFull(opts.Secret, diags); err != nil {
 		return nil, err
 	}
@@ -149,6 +153,7 @@ func NewPeer(opts PeerOpts) (Peer, error) {
 			rand:        opts.Rand,
 			qBytes:      qBytes,
 			epsPriv:     epsPriv,
+			sampleProp:  sampleProp,
 		}, nil
 	}
 	return &bob{
@@ -158,6 +163,7 @@ func NewPeer(opts PeerOpts) (Peer, error) {
 		rand:        opts.Rand,
 		qBytes:      qBytes,
 		epsPriv:     epsPriv,
+		sampleProp:  sampleProp,
 	}, nil
 }
 

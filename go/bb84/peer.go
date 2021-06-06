@@ -2,8 +2,8 @@ package bb84
 
 import (
 	"fmt"
-	"io"
 	"math"
+	"math/rand"
 
 	"github.com/alan-christopher/bb84/go/bb84/bitarray"
 	"github.com/alan-christopher/bb84/go/bb84/photon"
@@ -14,20 +14,22 @@ import (
 type alice struct {
 	sender      photon.Sender
 	sideChannel *protoFramer
-	rand        io.Reader
+	rand        *rand.Rand
 	reconciler  reconciler
 	qBytes      int
 	epsPriv     float64
+	sampleProp  float64
 }
 
 // A bob represents the second BB84 participant.
 type bob struct {
 	receiver    photon.Receiver
 	sideChannel *protoFramer
-	rand        io.Reader
+	rand        *rand.Rand
 	reconciler  reconciler
 	qBytes      int
 	epsPriv     float64
+	sampleProp  float64
 }
 
 // NegotiateKey implements the Peer interface.
@@ -146,18 +148,16 @@ func (b *bob) sift(bits, bases, dropped bitarray.Dense) (sifted bitarray.Dense, 
 	return sift(bits, bases, aBasis, dropped), nil
 }
 
-// TODO: support configurable sampling proportion
-// TODO: just send a random seed to bob, then use the same sampling procedure on
-//   both ends. Less bandwidth that way.
 func (a *alice) estimateQBER(sifted bitarray.Dense) (unleaked bitarray.Dense, qber float64, err error) {
-	// Announce sampled values
-	buf := make([]byte, sifted.ByteSize())
-	a.rand.Read(buf)
-	sampleMask := bitarray.NewDense(buf, sifted.Size())
-	sampled, unsampled := partition(sifted, sampleMask)
+	// Announce sampled bits
+	seed := a.rand.Int63()
+	unsampled, sampled, err := sample(sifted, a.sampleProp, seed)
+	if err != nil {
+		return bitarray.Empty(), 0, err
+	}
 	bitsAnnounce := &bb84pb.BitAnnouncement{
-		Bits: sampled.ToProto(),
-		Mask: sampleMask.ToProto(),
+		Bits:        sampled.ToProto(),
+		ShuffleSeed: seed,
 	}
 	if err := a.sideChannel.Write(bitsAnnounce); err != nil {
 		return bitarray.Empty(), 0, fmt.Errorf("announcing bases: %w", err)
@@ -174,18 +174,19 @@ func (a *alice) estimateQBER(sifted bitarray.Dense) (unleaked bitarray.Dense, qb
 func (b *bob) estimateQBER(sifted bitarray.Dense) (unleaked bitarray.Dense, qber float64, err error) {
 	bitsAnnounce := new(bb84pb.BitAnnouncement)
 	if err := b.sideChannel.Read(bitsAnnounce); err != nil {
-		return bitarray.Empty(), 0, fmt.Errorf("Receiving sampled bits: %w", err)
+		return bitarray.Empty(), 0, fmt.Errorf("receiving sampled bits: %w", err)
 	}
 	aSampled := bitarray.DenseFromProto(bitsAnnounce.Bits)
-	sampleMask := bitarray.DenseFromProto(bitsAnnounce.Mask)
-	bSampled, unsampled := partition(sifted, sampleMask)
-
+	unsampled, bSampled, err := sample(sifted, b.sampleProp, bitsAnnounce.ShuffleSeed)
+	if err != nil {
+		return bitarray.Empty(), 0, fmt.Errorf("sampling bits: %w", err)
+	}
 	// Calculate and announce sampled QBER
 	errors := aSampled.XOr(bSampled).CountOnes()
 	qber = float64(errors) / float64(aSampled.Size())
 	qa := &bb84pb.QBERAnnouncement{Qber: qber}
 	if err := b.sideChannel.Write(qa); err != nil {
-		return bitarray.Empty(), 0, fmt.Errorf("receiving QBER announcement: %w", err)
+		return bitarray.Empty(), 0, fmt.Errorf("sending QBER announcement: %w", err)
 	}
 	return unsampled, qber, nil
 }
@@ -236,8 +237,20 @@ func sift(bits, sendBasis, receiveBasis, dropped bitarray.Dense) bitarray.Dense 
 	return bits.Select(siftMask)
 }
 
-func partition(bits, mask bitarray.Dense) (masked, unmasked bitarray.Dense) {
-	return bits.Select(mask), bits.Select(mask.Not())
+func sample(bits bitarray.Dense, proportion float64, seed int64) (unsampled, sampled bitarray.Dense, err error) {
+	r := rand.New(rand.NewSource(seed))
+	bits.Shuffle(r)
+	n := bits.Size()
+	k := int(proportion * float64(n))
+	unsampled, err = bits.Slice(0, n-k)
+	if err != nil {
+		return bitarray.Empty(), bitarray.Empty(), nil
+	}
+	sampled, err = bits.Slice(n-k, n)
+	if err != nil {
+		return bitarray.Empty(), bitarray.Empty(), nil
+	}
+	return unsampled, sampled, nil
 }
 
 func extractKey(seed, x bitarray.Dense, bitsLeaked, eps float64) (bitarray.Dense, error) {

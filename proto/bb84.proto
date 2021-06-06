@@ -19,8 +19,8 @@ message BasisAnnouncement {
 message BitAnnouncement {
 	// Specifies the values of the bits (en|de)coded on the quantum channel.
 	DenseBitArray bits = 1;
-	// Specifies which entries of the original bits array were sampled.
-	DenseBitArray mask = 2;
+	// Specifies the seed to use for shuffling the bitarray before sampling.
+	int64 shuffle_seed = 2;
 }
 
 message QBERAnnouncement {
@@ -31,7 +31,7 @@ message QBERAnnouncement {
 message ParityAnnouncement {
 	// The total parities of each of the code blocks which comprise the key
 	// being negotiated.
-	DenseBitArray Parities = 1;
+	DenseBitArray parities = 1;
 }
 
 message SyndromeAnnouncement {
