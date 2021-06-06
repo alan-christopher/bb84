@@ -15,7 +15,7 @@ type Peer interface {
 
 type reconcileResult struct {
 	xHat       bitarray.Dense
-	bitLeakage int
+	bitLeakage float64
 }
 
 type reconciler interface {

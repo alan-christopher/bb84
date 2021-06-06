@@ -26,8 +26,8 @@ func (a *alice) NegotiateKey(rawByteCount int) (bitarray.Dense, float64, error) 
 	if err != nil {
 		return bitarray.Empty(), 0, err
 	}
-	bitsLeaked := recRes.bitLeakage + calcMaxEveInfo(qber, sifted.Size())
-	seed, err := a.sendSeed(recRes.xHat.Size(), bitsLeaked)
+	bitsLeaked := recRes.bitLeakage + calcMaxEveInfo(qber, unleaked.Size(), sifted.Size()-unleaked.Size())
+	seed, err := a.sendSeed(recRes.xHat.Size(), int(bitsLeaked))
 	if err != nil {
 		return bitarray.Empty(), 0, err
 	}
@@ -56,7 +56,7 @@ func (b *bob) NegotiateKey(rawByteCount int) (bitarray.Dense, float64, error) {
 	if err != nil {
 		return bitarray.Empty(), 0, err
 	}
-	bitsLeaked := recRes.bitLeakage + calcMaxEveInfo(qber, sifted.Size())
+	bitsLeaked := recRes.bitLeakage + calcMaxEveInfo(qber, unleaked.Size(), sifted.Size()-unleaked.Size())
 	seed, err := b.receiveSeed()
 	if err != nil {
 		return bitarray.Empty(), 0, err
@@ -169,6 +169,9 @@ func (b *bob) estimateQBER(sifted bitarray.Dense) (unleaked bitarray.Dense, qber
 }
 
 func (a *alice) sendSeed(bitCount, leakage int) (bitarray.Dense, error) {
+	// This actually slightly overcounts the number of bits of seed to generate
+	// and send, by overestimating the hash output dimension by not accounting
+	// for the epsilon parameter in the LHL.
 	needed := bitCount + (bitCount - leakage) - 1
 	seed := make([]byte, bitarray.BytesFor(needed))
 	a.random.Read(seed)
@@ -191,10 +194,17 @@ func (b *bob) receiveSeed() (bitarray.Dense, error) {
 // consisting of n qbits for which an error rate of qber was observed.
 //
 // See also, https://link.springer.com/article/10.1007/BF00191318
-func calcMaxEveInfo(qber float64, n int) int {
-	// TODO: this doesn't account for qber's precision. It really needs to.
-	leakRate := 2 * math.Sqrt(2) * qber
-	return int(math.Ceil(leakRate * float64(n)))
+func calcMaxEveInfo(qber float64, n, k int) float64 {
+	// TODO: make epsilon a configurable parameter
+	const eps = 1e-12
+
+	// See https://arxiv.org/abs/1506.08458, lemma 6.
+	A := float64(n*k*k) / float64((n+k)*(k+1))
+	nu := math.Sqrt(0.5 * math.Log(1/eps) / A)
+	qberPessimistic := qber + nu
+
+	// See https://link.springer.com/article/10.1007/BF00191318.
+	return 2 * math.Sqrt(2) * qberPessimistic * float64(n)
 }
 
 func sift(bits, sendBasis, receiveBasis, dropped bitarray.Dense) bitarray.Dense {
@@ -209,10 +219,12 @@ func partition(bits, mask bitarray.Dense) (masked, unmasked bitarray.Dense) {
 	return bits.Select(mask), bits.Select(mask.Not())
 }
 
-func extractKey(seed, x bitarray.Dense, bitsLeaked int) (bitarray.Dense, error) {
+func extractKey(seed, x bitarray.Dense, bitsLeaked float64) (bitarray.Dense, error) {
+	// TODO: make epsilon a configurable parameter
+	const eps = 1e-12
 	t := toeplitz{
 		diags: seed,
-		m:     x.Size() - bitsLeaked,
+		m:     x.Size() - int(math.Ceil(bitsLeaked+2*math.Log(1/eps))),
 		n:     x.Size(),
 	}
 	return t.Mul(x)
