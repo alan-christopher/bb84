@@ -28,7 +28,6 @@ message QBERAnnouncement {
 	double qber = 1;
 }
 
-
 message ParityAnnouncement {
 	// The total parities of each of the code blocks which comprise the key
 	// being negotiated.

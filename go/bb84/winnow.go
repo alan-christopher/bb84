@@ -17,8 +17,11 @@ import (
 type winnower struct {
 	channel *protoFramer
 	rand    *rand.Rand
+
+	// TODO: infer the proper sequence of winnows according to an Epsilon
+	//   parameter and the initial parameter estimation.
 	iters   []int
-	isBob   bool
+	isAlice bool
 }
 
 func (w winnower) Reconcile(x bitarray.Dense) (reconcileResult, error) {
@@ -36,6 +39,7 @@ func (w winnower) Reconcile(x bitarray.Dense) (reconcileResult, error) {
 }
 
 func (w winnower) winnow(x bitarray.Dense, hBits int) (bitarray.Dense, error) {
+	x.Shuffle(w.rand)
 	syndromes, err := w.getSyndromes(x, hBits)
 	if err != nil {
 		return bitarray.Empty(), err
@@ -50,7 +54,6 @@ func (w winnower) winnow(x bitarray.Dense, hBits int) (bitarray.Dense, error) {
 	}
 	w.applySyndromes(&x, synSums, todo, hBits)
 	x = w.maintainPrivacy(x, todo, hBits)
-	x.Shuffle(w.rand)
 
 	return x, nil
 }
@@ -61,7 +64,7 @@ func (w winnower) exchangeTotalParity(syndromes []bitarray.Dense, hBits int) (bi
 		tp.AppendBit(syn.Get(hBits))
 	}
 	tppb := &bb84pb.ParityAnnouncement{}
-	if w.isBob {
+	if w.isAlice {
 		if err := w.channel.Write(&bb84pb.ParityAnnouncement{Parities: tp.ToProto()}); err != nil {
 			return bitarray.Empty(), nil
 		}
@@ -93,7 +96,7 @@ func (w winnower) exchangeFullSyndromes(syndromes []bitarray.Dense, todo bitarra
 		}
 	}
 	// Alice announces, Bob fixes.
-	if !w.isBob {
+	if w.isAlice {
 		msg := &bb84pb.SyndromeAnnouncement{}
 		for _, syn := range filteredSyn {
 			msg.Syndromes = append(msg.Syndromes, syn.ToProto())
@@ -118,7 +121,7 @@ func (w winnower) exchangeFullSyndromes(syndromes []bitarray.Dense, todo bitarra
 }
 
 func (w winnower) applySyndromes(x *bitarray.Dense, synSums []bitarray.Dense, todo bitarray.Dense, hBits int) error {
-	if !w.isBob {
+	if w.isAlice {
 		// Alice announces, Bob fixes.
 		return nil
 	}

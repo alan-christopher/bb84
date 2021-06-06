@@ -78,7 +78,7 @@ func TestSECDED(t *testing.T) {
 }
 
 func TestApplySyndromes(t *testing.T) {
-	w := winnower{isBob: true}
+	w := winnower{isAlice: false}
 	const hBits = 3
 
 	tcs := []struct {

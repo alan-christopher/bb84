@@ -20,7 +20,6 @@ type toeplitz struct {
 // Mul computes the matrix product Av between the toeplitz matrix t and the
 // provided vector.
 func (t toeplitz) Mul(vec bitarray.Dense) (bitarray.Dense, error) {
-	const sizeByte = 8
 	if t.diags.Size() < t.m+t.n-1 {
 		return bitarray.Dense{}, fmt.Errorf("improper toeplitz construction, has %d diagonals, needs %d", t.diags.Size(), t.m+t.n-1)
 	}

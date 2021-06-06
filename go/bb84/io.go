@@ -52,9 +52,7 @@ func (p *protoFramer) Read(m proto.Message) error {
 	if _, err := io.ReadFull(p.rw, marshalled); err != nil {
 		return err
 	}
-	// TODO: avoid magic number
-	// TODO: don't assume byte alignment
-	mac := make([]byte, p.t.m/8)
+	mac := make([]byte, bitarray.BytesFor(p.t.m))
 	if _, err := io.ReadFull(p.rw, mac); err != nil {
 		return err
 	}
@@ -70,9 +68,9 @@ func (p *protoFramer) Read(m proto.Message) error {
 }
 
 func (p *protoFramer) buildMAC(msg []byte) ([]byte, error) {
-	// TODO: avoid magic number
-	p.t.n = len(msg) * 8
-	hash, err := p.t.Mul(bitarray.NewDense(msg, -1))
+	v := bitarray.NewDense(msg, -1)
+	p.t.n = v.Size()
+	hash, err := p.t.Mul(v)
 	if err != nil {
 		return nil, err
 	}

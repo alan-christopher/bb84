@@ -2,15 +2,37 @@ package bb84
 
 import (
 	"fmt"
+	"io"
 	"math"
 
 	"github.com/alan-christopher/bb84/go/bb84/bitarray"
+	"github.com/alan-christopher/bb84/go/bb84/photon"
 	"github.com/alan-christopher/bb84/go/generated/bb84pb"
 )
 
+// An alice represents the first BB84 participant.
+type alice struct {
+	sender      photon.Sender
+	sideChannel *protoFramer
+	rand        io.Reader
+	reconciler  reconciler
+	qBytes      int
+	epsPriv     float64
+}
+
+// A bob represents the second BB84 participant.
+type bob struct {
+	receiver    photon.Receiver
+	sideChannel *protoFramer
+	rand        io.Reader
+	reconciler  reconciler
+	qBytes      int
+	epsPriv     float64
+}
+
 // NegotiateKey implements the Peer interface.
-func (a *alice) NegotiateKey(rawByteCount int) (bitarray.Dense, float64, error) {
-	bits, bases, err := a.sendQBits(rawByteCount)
+func (a *alice) NegotiateKey() (bitarray.Dense, float64, error) {
+	bits, bases, err := a.sendQBits()
 	if err != nil {
 		return bitarray.Empty(), 0, err
 	}
@@ -26,12 +48,12 @@ func (a *alice) NegotiateKey(rawByteCount int) (bitarray.Dense, float64, error) 
 	if err != nil {
 		return bitarray.Empty(), 0, err
 	}
-	bitsLeaked := recRes.bitLeakage + calcMaxEveInfo(qber, unleaked.Size(), sifted.Size()-unleaked.Size())
+	bitsLeaked := recRes.bitLeakage + calcMaxEveInfo(qber, a.epsPriv, unleaked.Size(), sifted.Size()-unleaked.Size())
 	seed, err := a.sendSeed(recRes.xHat.Size(), int(bitsLeaked))
 	if err != nil {
 		return bitarray.Empty(), 0, err
 	}
-	k, err := extractKey(seed, recRes.xHat, bitsLeaked)
+	k, err := extractKey(seed, recRes.xHat, bitsLeaked, a.epsPriv)
 	if err != nil {
 		return bitarray.Empty(), 0, err
 	}
@@ -39,8 +61,8 @@ func (a *alice) NegotiateKey(rawByteCount int) (bitarray.Dense, float64, error) 
 }
 
 // NegotiateKey implements the Peer interface.
-func (b *bob) NegotiateKey(rawByteCount int) (bitarray.Dense, float64, error) {
-	bits, bases, dropped, err := b.receiveQBits(rawByteCount)
+func (b *bob) NegotiateKey() (bitarray.Dense, float64, error) {
+	bits, bases, dropped, err := b.receiveQBits()
 	if err != nil {
 		return bitarray.Empty(), 0, err
 	}
@@ -56,23 +78,23 @@ func (b *bob) NegotiateKey(rawByteCount int) (bitarray.Dense, float64, error) {
 	if err != nil {
 		return bitarray.Empty(), 0, err
 	}
-	bitsLeaked := recRes.bitLeakage + calcMaxEveInfo(qber, unleaked.Size(), sifted.Size()-unleaked.Size())
+	bitsLeaked := recRes.bitLeakage + calcMaxEveInfo(qber, b.epsPriv, unleaked.Size(), sifted.Size()-unleaked.Size())
 	seed, err := b.receiveSeed()
 	if err != nil {
 		return bitarray.Empty(), 0, err
 	}
-	k, err := extractKey(seed, recRes.xHat, bitsLeaked)
+	k, err := extractKey(seed, recRes.xHat, bitsLeaked, b.epsPriv)
 	if err != nil {
 		return bitarray.Empty(), 0, err
 	}
 	return k, qber, nil
 }
 
-func (a *alice) sendQBits(rbc int) (bits, bases bitarray.Dense, err error) {
-	bitArr := make([]byte, rbc)
-	basisArr := make([]byte, rbc)
-	a.random.Read(bitArr)
-	a.random.Read(basisArr)
+func (a *alice) sendQBits() (bits, bases bitarray.Dense, err error) {
+	bitArr := make([]byte, a.qBytes)
+	basisArr := make([]byte, a.qBytes)
+	a.rand.Read(bitArr)
+	a.rand.Read(basisArr)
 	bits = bitarray.NewDense(bitArr, -1)
 	bases = bitarray.NewDense(basisArr, -1)
 	if err := a.sender.Send(bits.Data(), bases.Data()); err != nil {
@@ -81,9 +103,9 @@ func (a *alice) sendQBits(rbc int) (bits, bases bitarray.Dense, err error) {
 	return bits, bases, err
 }
 
-func (b *bob) receiveQBits(rbc int) (bits, bases, dropped bitarray.Dense, err error) {
-	basisArr := make([]byte, rbc)
-	b.random.Read(basisArr)
+func (b *bob) receiveQBits() (bits, bases, dropped bitarray.Dense, err error) {
+	basisArr := make([]byte, b.qBytes)
+	b.rand.Read(basisArr)
 	bases = bitarray.NewDense(basisArr, -1)
 	bitsArr, droppedArr, err := b.receiver.Receive(basisArr)
 	bits = bitarray.NewDense(bitsArr, -1)
@@ -130,7 +152,7 @@ func (b *bob) sift(bits, bases, dropped bitarray.Dense) (sifted bitarray.Dense, 
 func (a *alice) estimateQBER(sifted bitarray.Dense) (unleaked bitarray.Dense, qber float64, err error) {
 	// Announce sampled values
 	buf := make([]byte, sifted.ByteSize())
-	a.random.Read(buf)
+	a.rand.Read(buf)
 	sampleMask := bitarray.NewDense(buf, sifted.Size())
 	sampled, unsampled := partition(sifted, sampleMask)
 	bitsAnnounce := &bb84pb.BitAnnouncement{
@@ -174,7 +196,7 @@ func (a *alice) sendSeed(bitCount, leakage int) (bitarray.Dense, error) {
 	// for the epsilon parameter in the LHL.
 	needed := bitCount + (bitCount - leakage) - 1
 	seed := make([]byte, bitarray.BytesFor(needed))
-	a.random.Read(seed)
+	a.rand.Read(seed)
 	if err := a.sideChannel.Write(&bb84pb.SeedAnnouncement{Seed: seed}); err != nil {
 		return bitarray.Empty(), err
 	}
@@ -194,9 +216,8 @@ func (b *bob) receiveSeed() (bitarray.Dense, error) {
 // consisting of n qbits for which an error rate of qber was observed.
 //
 // See also, https://link.springer.com/article/10.1007/BF00191318
-func calcMaxEveInfo(qber float64, n, k int) float64 {
-	// TODO: make epsilon a configurable parameter
-	const eps = 1e-12
+func calcMaxEveInfo(qber, eps float64, n, k int) float64 {
+	// TODO: account for possible beam-splitting leakage.
 
 	// See https://arxiv.org/abs/1506.08458, lemma 6.
 	A := float64(n*k*k) / float64((n+k)*(k+1))
@@ -219,9 +240,7 @@ func partition(bits, mask bitarray.Dense) (masked, unmasked bitarray.Dense) {
 	return bits.Select(mask), bits.Select(mask.Not())
 }
 
-func extractKey(seed, x bitarray.Dense, bitsLeaked float64) (bitarray.Dense, error) {
-	// TODO: make epsilon a configurable parameter
-	const eps = 1e-12
+func extractKey(seed, x bitarray.Dense, bitsLeaked, eps float64) (bitarray.Dense, error) {
 	t := toeplitz{
 		diags: seed,
 		m:     x.Size() - int(math.Ceil(bitsLeaked+2*math.Log(1/eps))),

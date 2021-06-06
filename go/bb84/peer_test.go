@@ -21,45 +21,36 @@ type negotiationResult struct {
 func TestWinnowedNegotation(t *testing.T) {
 	l, r := net.Pipe()
 	sender, receiver := photon.NewSimulatedChannel(0)
-	otp := make([]byte, 4<<10)
+	otp := make([]byte, 1<<20)
 	rand.Read(otp)
-	diags := make([]byte, 1<<20)
-	rand.Read(diags)
-	aWire := &protoFramer{
-		rw:     l,
-		secret: bytes.NewBuffer(otp),
-		t:      toeplitz{diags: bitarray.NewDense(diags, -1), m: 40},
-	}
-	bWire := &protoFramer{
-		rw:     r,
-		secret: bytes.NewBuffer(otp),
-		t:      toeplitz{diags: bitarray.NewDense(diags, -1), m: 40},
-	}
-	a := alice{
-		sideChannel: aWire,
-		sender:      sender,
-		random:      rand.New(rand.NewSource(42)),
-		reconciler: winnower{
-			channel: aWire,
-			isBob:   false,
-			rand:    rand.New(rand.NewSource(17)),
-			iters:   []int{3, 3, 3, 4, 6, 7, 7, 7},
+	a, err := NewPeer(PeerOpts{
+		Sender:           sender,
+		ClassicalChannel: l,
+		Rand:             rand.New(rand.NewSource(42)),
+		Secret:           bytes.NewBuffer(otp),
+		WinnowOpts: &WinnowOpts{
+			Iters:    []int{3, 3, 3, 4, 6, 7, 7, 7},
+			SyncRand: rand.New(rand.NewSource(17)),
 		},
+	})
+	if err != nil {
+		t.Fatalf("Building Alice: %v", err)
 	}
-	b := bob{
-		sideChannel: bWire,
-		receiver:    receiver,
-		random:      rand.New(rand.NewSource(1337)),
-		reconciler: winnower{
-			channel: bWire,
-			isBob:   true,
-			rand:    rand.New(rand.NewSource(17)),
-			iters:   []int{3, 3, 3, 4, 6, 7, 7, 7},
+	b, err := NewPeer(PeerOpts{
+		Receiver:         receiver,
+		ClassicalChannel: r,
+		Rand:             rand.New(rand.NewSource(1337)),
+		Secret:           bytes.NewBuffer(otp),
+		WinnowOpts: &WinnowOpts{
+			Iters:    []int{3, 3, 3, 4, 6, 7, 7, 7},
+			SyncRand: rand.New(rand.NewSource(17)),
 		},
+	})
+	if err != nil {
+		t.Fatalf("Building Bob: %v", err)
 	}
-	const qBytes = 4 << 10
-	legitErrs := bitarray.NewDense(nil, qBytes)
-	for i := 0; i < qBytes*8/20; i++ {
+	legitErrs := bitarray.NewDense(nil, DefaultQBytes)
+	for i := 0; i < DefaultQBytes*8/20; i++ {
 		legitErrs.Set(i, true)
 	}
 	legitErrs.Shuffle(rand.New(rand.NewSource(99)))
@@ -68,11 +59,11 @@ func TestWinnowedNegotation(t *testing.T) {
 	aResCh := make(chan negotiationResult, 1)
 	bResCh := make(chan negotiationResult, 1)
 	go func() {
-		k, qber, err := a.NegotiateKey(qBytes)
+		k, qber, err := a.NegotiateKey()
 		aResCh <- negotiationResult{k, qber, err}
 	}()
 	go func() {
-		k, qber, err := b.NegotiateKey(qBytes)
+		k, qber, err := b.NegotiateKey()
 		bResCh <- negotiationResult{k, qber, err}
 	}()
 

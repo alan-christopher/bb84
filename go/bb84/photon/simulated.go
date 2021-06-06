@@ -25,8 +25,6 @@ type SimulatedSender struct {
 }
 
 type SimulatedReceiver struct {
-	// TODO: allow a drop rate to be specified, rather than requiring the
-	//   caller to specify which bits failed to be transmitted.
 	DropMask []byte
 	Errors   []byte
 
@@ -57,7 +55,6 @@ func (sr *SimulatedReceiver) Receive(bases []byte) (bits, dropped []byte, err er
 	rand.Read(buf)
 	flips := bitarray.NewDense(buf, -1)
 	recBases := bitarray.NewDense(bases, -1)
-	// TODO: support flips resulting from measurement errors.
 	flips = flips.And(sendBases.XOr(recBases))
 	flips = flips.Or(bitarray.NewDense(sr.Errors, -1))
 	return flips.XOr(sendBits).Data(), sr.DropMask, nil
