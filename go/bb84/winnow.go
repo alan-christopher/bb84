@@ -24,13 +24,13 @@ type winnower struct {
 	isAlice bool
 }
 
-func (w winnower) Reconcile(x bitarray.Dense) (reconcileResult, error) {
+func (w winnower) Reconcile(x bitarray.Dense, s *Stats) (reconcileResult, error) {
 	var (
 		xHat bitarray.Dense = x
 		err  error
 	)
 	for _, hBits := range w.iters {
-		xHat, err = w.winnow(xHat, hBits)
+		xHat, err = w.winnow(xHat, hBits, s)
 		if err != nil {
 			return reconcileResult{}, err
 		}
@@ -38,17 +38,17 @@ func (w winnower) Reconcile(x bitarray.Dense) (reconcileResult, error) {
 	return reconcileResult{xHat: xHat}, nil
 }
 
-func (w winnower) winnow(x bitarray.Dense, hBits int) (bitarray.Dense, error) {
+func (w winnower) winnow(x bitarray.Dense, hBits int, s *Stats) (bitarray.Dense, error) {
 	x.Shuffle(w.rand)
 	syndromes, err := w.getSyndromes(x, hBits)
 	if err != nil {
 		return bitarray.Empty(), err
 	}
-	todo, err := w.exchangeTotalParity(syndromes, hBits)
+	todo, err := w.exchangeTotalParity(syndromes, hBits, s)
 	if err != nil {
 		return bitarray.Empty(), err
 	}
-	synSums, err := w.exchangeFullSyndromes(syndromes, todo, hBits)
+	synSums, err := w.exchangeFullSyndromes(syndromes, todo, hBits, s)
 	if err != nil {
 		return bitarray.Empty(), err
 	}
@@ -58,24 +58,24 @@ func (w winnower) winnow(x bitarray.Dense, hBits int) (bitarray.Dense, error) {
 	return x, nil
 }
 
-func (w winnower) exchangeTotalParity(syndromes []bitarray.Dense, hBits int) (bitarray.Dense, error) {
+func (w winnower) exchangeTotalParity(syndromes []bitarray.Dense, hBits int, s *Stats) (bitarray.Dense, error) {
 	tp := bitarray.Empty()
 	for _, syn := range syndromes {
 		tp.AppendBit(syn.Get(hBits))
 	}
 	tppb := &bb84pb.ParityAnnouncement{}
 	if w.isAlice {
-		if err := w.channel.Write(&bb84pb.ParityAnnouncement{Parities: tp.ToProto()}); err != nil {
+		if err := w.channel.Write(&bb84pb.ParityAnnouncement{Parities: tp.ToProto()}, s); err != nil {
 			return bitarray.Empty(), nil
 		}
-		if err := w.channel.Read(tppb); err != nil {
+		if err := w.channel.Read(tppb, s); err != nil {
 			return bitarray.Empty(), nil
 		}
 	} else {
-		if err := w.channel.Read(tppb); err != nil {
+		if err := w.channel.Read(tppb, s); err != nil {
 			return bitarray.Empty(), nil
 		}
-		if err := w.channel.Write(&bb84pb.ParityAnnouncement{Parities: tp.ToProto()}); err != nil {
+		if err := w.channel.Write(&bb84pb.ParityAnnouncement{Parities: tp.ToProto()}, s); err != nil {
 			return bitarray.Empty(), nil
 		}
 	}
@@ -88,7 +88,8 @@ func (w winnower) exchangeTotalParity(syndromes []bitarray.Dense, hBits int) (bi
 	return tp.XOr(otherTP), nil
 }
 
-func (w winnower) exchangeFullSyndromes(syndromes []bitarray.Dense, todo bitarray.Dense, hBits int) ([]bitarray.Dense, error) {
+func (w winnower) exchangeFullSyndromes(
+	syndromes []bitarray.Dense, todo bitarray.Dense, hBits int, s *Stats) ([]bitarray.Dense, error) {
 	var filteredSyn []bitarray.Dense
 	for i, syn := range syndromes {
 		if todo.Get(i) {
@@ -101,10 +102,10 @@ func (w winnower) exchangeFullSyndromes(syndromes []bitarray.Dense, todo bitarra
 		for _, syn := range filteredSyn {
 			msg.Syndromes = append(msg.Syndromes, syn.ToProto())
 		}
-		return nil, w.channel.Write(msg)
+		return nil, w.channel.Write(msg, s)
 	}
 	synpb := &bb84pb.SyndromeAnnouncement{}
-	if err := w.channel.Read(synpb); err != nil {
+	if err := w.channel.Read(synpb, s); err != nil {
 		return nil, err
 	}
 	if len(synpb.Syndromes) != len(filteredSyn) {

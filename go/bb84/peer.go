@@ -33,63 +33,65 @@ type bob struct {
 }
 
 // NegotiateKey implements the Peer interface.
-func (a *alice) NegotiateKey() (bitarray.Dense, float64, error) {
+func (a *alice) NegotiateKey() (key bitarray.Dense, stats Stats, err error) {
 	bits, bases, err := a.sendQBits()
 	if err != nil {
-		return bitarray.Empty(), 0, err
+		return
 	}
-	sifted, err := a.sift(bits, bases)
+	sifted, err := a.sift(bits, bases, &stats)
 	if err != nil {
-		return bitarray.Empty(), 0, err
+		return
 	}
-	unleaked, qber, err := a.estimateQBER(sifted)
+	unleaked, err := a.estimateQBER(sifted, &stats)
 	if err != nil {
-		return bitarray.Empty(), 0, err
+		return
 	}
-	recRes, err := a.reconciler.Reconcile(unleaked)
+	recRes, err := a.reconciler.Reconcile(unleaked, &stats)
 	if err != nil {
-		return bitarray.Empty(), 0, err
+		return
 	}
-	bitsLeaked := recRes.bitLeakage + calcMaxEveInfo(qber, a.epsPriv, unleaked.Size(), sifted.Size()-unleaked.Size())
-	seed, err := a.sendSeed(recRes.xHat.Size(), int(bitsLeaked))
+	bitsLeaked := recRes.bitLeakage + calcMaxEveInfo(
+		stats.QBER, a.epsPriv, unleaked.Size(), sifted.Size()-unleaked.Size())
+	seed, err := a.sendSeed(recRes.xHat.Size(), int(bitsLeaked), &stats)
 	if err != nil {
-		return bitarray.Empty(), 0, err
+		return
 	}
-	k, err := extractKey(seed, recRes.xHat, bitsLeaked, a.epsPriv)
+	key, err = extractKey(seed, recRes.xHat, bitsLeaked, a.epsPriv)
 	if err != nil {
-		return bitarray.Empty(), 0, err
+		return
 	}
-	return k, qber, nil
+	return
 }
 
 // NegotiateKey implements the Peer interface.
-func (b *bob) NegotiateKey() (bitarray.Dense, float64, error) {
+func (b *bob) NegotiateKey() (key bitarray.Dense, stats Stats, err error) {
 	bits, bases, dropped, err := b.receiveQBits()
 	if err != nil {
-		return bitarray.Empty(), 0, err
+		return
 	}
-	sifted, err := b.sift(bits, bases, dropped)
+	sifted, err := b.sift(bits, bases, dropped, &stats)
 	if err != nil {
-		return bitarray.Empty(), 0, err
+		return
 	}
-	unleaked, qber, err := b.estimateQBER(sifted)
+	unleaked, err := b.estimateQBER(sifted, &stats)
 	if err != nil {
-		return bitarray.Empty(), 0, err
+		return
 	}
-	recRes, err := b.reconciler.Reconcile(unleaked)
+	recRes, err := b.reconciler.Reconcile(unleaked, &stats)
 	if err != nil {
-		return bitarray.Empty(), 0, err
+		return
 	}
-	bitsLeaked := recRes.bitLeakage + calcMaxEveInfo(qber, b.epsPriv, unleaked.Size(), sifted.Size()-unleaked.Size())
-	seed, err := b.receiveSeed()
+	bitsLeaked := recRes.bitLeakage + calcMaxEveInfo(
+		stats.QBER, b.epsPriv, unleaked.Size(), sifted.Size()-unleaked.Size())
+	seed, err := b.receiveSeed(&stats)
 	if err != nil {
-		return bitarray.Empty(), 0, err
+		return
 	}
-	k, err := extractKey(seed, recRes.xHat, bitsLeaked, b.epsPriv)
+	key, err = extractKey(seed, recRes.xHat, bitsLeaked, b.epsPriv)
 	if err != nil {
-		return bitarray.Empty(), 0, err
+		return
 	}
-	return k, qber, nil
+	return
 }
 
 func (a *alice) sendQBits() (bits, bases bitarray.Dense, err error) {
@@ -118,95 +120,99 @@ func (b *bob) receiveQBits() (bits, bases, dropped bitarray.Dense, err error) {
 	return bits, bases, dropped, nil
 }
 
-func (a *alice) sift(bits, bases bitarray.Dense) (sifted bitarray.Dense, err error) {
+func (a *alice) sift(bits, bases bitarray.Dense, s *Stats) (sifted bitarray.Dense, err error) {
 	bba := new(bb84pb.BasisAnnouncement)
-	if err := a.sideChannel.Read(bba); err != nil {
+	if err := a.sideChannel.Read(bba, s); err != nil {
 		return bitarray.Empty(), fmt.Errorf("receiving basis announcement: %w", err)
 	}
 	aba := &bb84pb.BasisAnnouncement{Bases: bases.ToProto()}
-	if err := a.sideChannel.Write(aba); err != nil {
+	if err := a.sideChannel.Write(aba, s); err != nil {
 		return bitarray.Empty(), fmt.Errorf("announcing bases: %w", err)
 	}
 	bBases := bitarray.DenseFromProto(bba.Bases)
 	bDropped := bitarray.DenseFromProto(bba.Dropped)
-	return sift(bits, bases, bBases, bDropped), nil
+	sifted = sift(bits, bases, bBases, bDropped)
+	return sifted, nil
 }
 
-func (b *bob) sift(bits, bases, dropped bitarray.Dense) (sifted bitarray.Dense, err error) {
+func (b *bob) sift(bits, bases, dropped bitarray.Dense, s *Stats) (sifted bitarray.Dense, err error) {
 	bba := &bb84pb.BasisAnnouncement{
 		Bases:   bases.ToProto(),
 		Dropped: dropped.ToProto(),
 	}
-	if err := b.sideChannel.Write(bba); err != nil {
+	if err := b.sideChannel.Write(bba, s); err != nil {
 		return bitarray.Empty(), fmt.Errorf("sending basis announcement: %w", err)
 	}
 	aba := new(bb84pb.BasisAnnouncement)
-	if err := b.sideChannel.Read(aba); err != nil {
+	if err := b.sideChannel.Read(aba, s); err != nil {
 		return bitarray.Empty(), fmt.Errorf("receiving bases: %w", err)
 	}
 	aBasis := bitarray.DenseFromProto(aba.Bases)
-	return sift(bits, bases, aBasis, dropped), nil
+	sifted = sift(bits, bases, aBasis, dropped)
+	return sifted, nil
 }
 
-func (a *alice) estimateQBER(sifted bitarray.Dense) (unleaked bitarray.Dense, qber float64, err error) {
+func (a *alice) estimateQBER(sifted bitarray.Dense, s *Stats) (unleaked bitarray.Dense, err error) {
 	// Announce sampled bits
 	seed := a.rand.Int63()
 	unsampled, sampled, err := sample(sifted, a.sampleProp, seed)
 	if err != nil {
-		return bitarray.Empty(), 0, err
+		return bitarray.Empty(), err
 	}
 	bitsAnnounce := &bb84pb.BitAnnouncement{
 		Bits:        sampled.ToProto(),
 		ShuffleSeed: seed,
 	}
-	if err := a.sideChannel.Write(bitsAnnounce); err != nil {
-		return bitarray.Empty(), 0, fmt.Errorf("announcing bases: %w", err)
+	if err := a.sideChannel.Write(bitsAnnounce, s); err != nil {
+		return bitarray.Empty(), fmt.Errorf("announcing bases: %w", err)
 	}
 
 	// Receive QBER for sample
 	qa := new(bb84pb.QBERAnnouncement)
-	if err := a.sideChannel.Read(qa); err != nil {
-		return bitarray.Empty(), 0, fmt.Errorf("receiving QBER announcement: %w", err)
+	if err := a.sideChannel.Read(qa, s); err != nil {
+		return bitarray.Empty(), fmt.Errorf("receiving QBER announcement: %w", err)
 	}
-	return unsampled, qa.Qber, nil
+	s.QBER = qa.Qber
+	return unsampled, nil
 }
 
-func (b *bob) estimateQBER(sifted bitarray.Dense) (unleaked bitarray.Dense, qber float64, err error) {
+func (b *bob) estimateQBER(sifted bitarray.Dense, s *Stats) (unleaked bitarray.Dense, err error) {
 	bitsAnnounce := new(bb84pb.BitAnnouncement)
-	if err := b.sideChannel.Read(bitsAnnounce); err != nil {
-		return bitarray.Empty(), 0, fmt.Errorf("receiving sampled bits: %w", err)
+	if err := b.sideChannel.Read(bitsAnnounce, s); err != nil {
+		return bitarray.Empty(), fmt.Errorf("receiving sampled bits: %w", err)
 	}
 	aSampled := bitarray.DenseFromProto(bitsAnnounce.Bits)
 	unsampled, bSampled, err := sample(sifted, b.sampleProp, bitsAnnounce.ShuffleSeed)
 	if err != nil {
-		return bitarray.Empty(), 0, fmt.Errorf("sampling bits: %w", err)
+		return bitarray.Empty(), fmt.Errorf("sampling bits: %w", err)
 	}
 	// Calculate and announce sampled QBER
 	errors := aSampled.XOr(bSampled).CountOnes()
-	qber = float64(errors) / float64(aSampled.Size())
-	qa := &bb84pb.QBERAnnouncement{Qber: qber}
-	if err := b.sideChannel.Write(qa); err != nil {
-		return bitarray.Empty(), 0, fmt.Errorf("sending QBER announcement: %w", err)
+	s.QBER = float64(errors) / float64(aSampled.Size())
+	qa := &bb84pb.QBERAnnouncement{Qber: s.QBER}
+	if err := b.sideChannel.Write(qa, s); err != nil {
+		return bitarray.Empty(), fmt.Errorf("sending QBER announcement: %w", err)
 	}
-	return unsampled, qber, nil
+
+	return unsampled, nil
 }
 
-func (a *alice) sendSeed(bitCount, leakage int) (bitarray.Dense, error) {
+func (a *alice) sendSeed(bitCount, leakage int, s *Stats) (bitarray.Dense, error) {
 	// This actually slightly overcounts the number of bits of seed to generate
 	// and send, by overestimating the hash output dimension by not accounting
 	// for the epsilon parameter in the LHL.
 	needed := bitCount + (bitCount - leakage) - 1
 	seed := make([]byte, bitarray.BytesFor(needed))
 	a.rand.Read(seed)
-	if err := a.sideChannel.Write(&bb84pb.SeedAnnouncement{Seed: seed}); err != nil {
+	if err := a.sideChannel.Write(&bb84pb.SeedAnnouncement{Seed: seed}, s); err != nil {
 		return bitarray.Empty(), err
 	}
 	return bitarray.NewDense(seed, -1), nil
 }
 
-func (b *bob) receiveSeed() (bitarray.Dense, error) {
+func (b *bob) receiveSeed(s *Stats) (bitarray.Dense, error) {
 	m := &bb84pb.SeedAnnouncement{}
-	if err := b.sideChannel.Read(m); err != nil {
+	if err := b.sideChannel.Read(m, s); err != nil {
 		return bitarray.Empty(), err
 	}
 	return bitarray.NewDense(m.Seed, -1), nil

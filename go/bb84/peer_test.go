@@ -13,9 +13,9 @@ import (
 // A convenience struct for pumping the return values from NegotiateKey into a
 // channel.
 type negotiationResult struct {
-	key  bitarray.Dense
-	qber float64
-	err  error
+	key   bitarray.Dense
+	stats Stats
+	err   error
 }
 
 func TestWinnowedNegotation(t *testing.T) {
@@ -59,12 +59,12 @@ func TestWinnowedNegotation(t *testing.T) {
 	aResCh := make(chan negotiationResult, 1)
 	bResCh := make(chan negotiationResult, 1)
 	go func() {
-		k, qber, err := a.NegotiateKey()
-		aResCh <- negotiationResult{k, qber, err}
+		k, s, err := a.NegotiateKey()
+		aResCh <- negotiationResult{k, s, err}
 	}()
 	go func() {
-		k, qber, err := b.NegotiateKey()
-		bResCh <- negotiationResult{k, qber, err}
+		k, s, err := b.NegotiateKey()
+		bResCh <- negotiationResult{k, s, err}
 	}()
 
 	var aRes, bRes negotiationResult

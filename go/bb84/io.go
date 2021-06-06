@@ -22,7 +22,7 @@ type protoFramer struct {
 	t      toeplitz
 }
 
-func (p *protoFramer) Write(m proto.Message) error {
+func (p *protoFramer) Write(m proto.Message, s *Stats) error {
 	marshalled, err := proto.Marshal(m)
 	if err != nil {
 		return err
@@ -30,9 +30,11 @@ func (p *protoFramer) Write(m proto.Message) error {
 	if err := binary.Write(p.rw, binary.LittleEndian, int32(len(marshalled))); err != nil {
 		return err
 	}
+	s.BytesSent += 4
 	if _, err := p.rw.Write(marshalled); err != nil {
 		return err
 	}
+	s.BytesSent += len(marshalled)
 	mac, err := p.buildMAC(marshalled)
 	if err != nil {
 		return err
@@ -40,22 +42,27 @@ func (p *protoFramer) Write(m proto.Message) error {
 	if _, err := p.rw.Write(mac); err != nil {
 		return err
 	}
+	s.BytesSent += len(mac)
+	s.MessagesSent++
 	return nil
 }
 
-func (p *protoFramer) Read(m proto.Message) error {
+func (p *protoFramer) Read(m proto.Message, s *Stats) error {
 	var mLen int32
 	if err := binary.Read(p.rw, binary.LittleEndian, &mLen); err != nil {
 		return err
 	}
+	s.BytesRead += 4
 	marshalled := make([]byte, mLen)
 	if _, err := io.ReadFull(p.rw, marshalled); err != nil {
 		return err
 	}
+	s.BytesRead += len(marshalled)
 	mac := make([]byte, bitarray.BytesFor(p.t.m))
 	if _, err := io.ReadFull(p.rw, mac); err != nil {
 		return err
 	}
+	s.BytesRead += len(mac)
 	emac, err := p.buildMAC(marshalled)
 	if err != nil {
 		return err
@@ -63,7 +70,7 @@ func (p *protoFramer) Read(m proto.Message) error {
 	if !bytes.Equal(mac, emac) {
 		return fmt.Errorf("invalid mac: got %v, expected %v", mac, emac)
 	}
-
+	s.MessagesReceived++
 	return proto.Unmarshal(marshalled, m)
 }
 

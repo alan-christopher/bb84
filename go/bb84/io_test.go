@@ -43,8 +43,8 @@ func TestSendReceive(t *testing.T) {
 	// operations asynchronously.
 	wErr := make(chan error, 1)
 	rErr := make(chan error, 1)
-	go func() { wErr <- alice.Write(msg) }()
-	go func() { rErr <- bob.Read(msg2) }()
+	go func() { wErr <- alice.Write(msg, &Stats{}) }()
+	go func() { rErr <- bob.Read(msg2, &Stats{}) }()
 
 	if err := <-wErr; err != nil {
 		t.Fatalf("error writing message: %v", err)
@@ -92,8 +92,8 @@ func TestMACVerification(t *testing.T) {
 	// operations asynchronously.
 	wErr := make(chan error, 1)
 	rErr := make(chan error, 1)
-	go func() { wErr <- alice.Write(msg) }()
-	go func() { rErr <- bob.Read(msg2) }()
+	go func() { wErr <- alice.Write(msg, &Stats{}) }()
+	go func() { rErr <- bob.Read(msg2, &Stats{}) }()
 
 	if err := <-wErr; err != nil {
 		t.Fatalf("Error writing message: %v", err)

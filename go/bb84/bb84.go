@@ -18,13 +18,23 @@ var (
 	DefaultSampleProportion = 0.5
 )
 
+// Stats packages together a collection of potentially interesting metrics
+// pertaining to a BB84 key negotiation.
+type Stats struct {
+	QBER             float64
+	MessagesSent     int
+	MessagesReceived int
+	BytesRead        int
+	BytesSent        int
+}
+
 // A Peer represents one of the two legitimate participants in a BB84 key
 // exchange.
 type Peer interface {
 	// NegotiateKey performs one round of BB84 key exchange, including
 	// "post-processing" steps, e.g.  error correction and privacy
 	// amplification.
-	NegotiateKey() (key bitarray.Dense, qber float64, err error)
+	NegotiateKey() (bitarray.Dense, Stats, error)
 }
 
 // A PeerOpts packages together the arguments necessary to construct a new Peer. Many of the fields
@@ -177,5 +187,5 @@ type reconciler interface {
 	// its sibling compute the same xHat with high probability. Note that the
 	// reconciler interface does not guarantee that all modifications to x occur
 	// on one side of the channel.
-	Reconcile(x bitarray.Dense) (reconcileResult, error)
+	Reconcile(x bitarray.Dense, s *Stats) (reconcileResult, error)
 }
