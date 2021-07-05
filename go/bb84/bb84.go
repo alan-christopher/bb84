@@ -50,8 +50,8 @@ type PeerOpts struct {
 	ClassicalChannel io.ReadWriter
 
 	// Rand provides a source of randomness. This may use pRNG for experimental
-	// and/or testing, but for unconditional security this must be
-	// truly random. Must be non-nil.
+	// and/or testing, but for unconditional security this should be truly
+	// random. Must be non-nil.
 	Rand *rand.Rand
 
 	// Secret provides a bootstrap secret shared between Alice and Bob for
@@ -61,6 +61,13 @@ type PeerOpts struct {
 	// QBytes specifies the number of quantum bytes to exchange
 	// per call to NegotiateKey.  Defaults to DefaultQBytes.
 	QBytes int
+	// QBytesFunc generates strings of qbits to send, primarily to facilitate
+	// experiments and testing. Nil means to read them from Rand. Ignored if
+	// receiving.
+	QBytesFunc func() []byte
+	// BasisFunc generates strings of bits to use as basis masks, primarily to
+	// facilitate experiments and testing. Nil means to read them from Rand.
+	BasisFunc func() []byte
 
 	// EpsilonAuth specifies the probability that we are willing to accept that
 	// Eve can forge a message. Each classical message exchanged spends
@@ -164,6 +171,8 @@ func NewPeer(opts PeerOpts) (Peer, error) {
 			qBytes:      qBytes,
 			epsPriv:     epsPriv,
 			sampleProp:  sampleProp,
+			qBytesFunc:  opts.QBytesFunc,
+			basisFunc:   opts.BasisFunc,
 		}, nil
 	}
 	return &bob{
@@ -174,6 +183,8 @@ func NewPeer(opts PeerOpts) (Peer, error) {
 		qBytes:      qBytes,
 		epsPriv:     epsPriv,
 		sampleProp:  sampleProp,
+		qBytesFunc:  opts.QBytesFunc,
+		basisFunc:   opts.BasisFunc,
 	}, nil
 }
 

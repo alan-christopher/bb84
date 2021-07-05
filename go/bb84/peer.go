@@ -19,6 +19,8 @@ type alice struct {
 	qBytes      int
 	epsPriv     float64
 	sampleProp  float64
+	qBytesFunc  func() []byte
+	basisFunc   func() []byte
 }
 
 // A bob represents the second BB84 participant.
@@ -30,6 +32,8 @@ type bob struct {
 	qBytes      int
 	epsPriv     float64
 	sampleProp  float64
+	qBytesFunc  func() []byte
+	basisFunc   func() []byte
 }
 
 // NegotiateKey implements the Peer interface.
@@ -95,10 +99,19 @@ func (b *bob) NegotiateKey() (key bitarray.Dense, stats Stats, err error) {
 }
 
 func (a *alice) sendQBits() (bits, bases bitarray.Dense, err error) {
-	bitArr := make([]byte, a.qBytes)
-	basisArr := make([]byte, a.qBytes)
-	a.rand.Read(bitArr)
-	a.rand.Read(basisArr)
+	var bitArr, basisArr []byte
+	if a.qBytesFunc == nil {
+		bitArr = make([]byte, a.qBytes)
+		a.rand.Read(bitArr)
+	} else {
+		bitArr = a.qBytesFunc()
+	}
+	if a.basisFunc == nil {
+		basisArr = make([]byte, a.qBytes)
+		a.rand.Read(basisArr)
+	} else {
+		basisArr = a.basisFunc()
+	}
 	bits = bitarray.NewDense(bitArr, -1)
 	bases = bitarray.NewDense(basisArr, -1)
 	if err := a.sender.Send(bits.Data(), bases.Data()); err != nil {
@@ -108,8 +121,13 @@ func (a *alice) sendQBits() (bits, bases bitarray.Dense, err error) {
 }
 
 func (b *bob) receiveQBits() (bits, bases, dropped bitarray.Dense, err error) {
-	basisArr := make([]byte, b.qBytes)
-	b.rand.Read(basisArr)
+	var basisArr []byte
+	if b.qBytesFunc == nil {
+		basisArr = make([]byte, b.qBytes)
+		b.rand.Read(basisArr)
+	} else {
+		basisArr = b.basisFunc()
+	}
 	bases = bitarray.NewDense(basisArr, -1)
 	bitsArr, droppedArr, err := b.receiver.Receive(basisArr)
 	bits = bitarray.NewDense(bitsArr, -1)
