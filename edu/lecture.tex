@@ -1,0 +1,393 @@
+%%   $ sudo apt-get install texinfo
+%%   $ texi2pdf -c lecture.tex
+
+\PassOptionsToPackage{table}{xcolor}
+\documentclass[pdf]{beamer}
+\mode<presentation>{\usetheme{Dresden}}
+\usepackage{lmodern}
+\usepackage{amsmath,textcomp,amssymb,geometry,graphicx,listings,array,color,amsthm}
+
+\usepackage{tikz}
+\usepackage{multicol}
+\usetikzlibrary{shapes,snakes}
+\usetikzlibrary{positioning}
+\usetikzlibrary{arrows}
+\usetikzlibrary{fit}
+
+%% For on-slide alerting of nodes
+\tikzstyle{alert} = [text=black, fill=blue!20, draw=black]
+\setbeamercolor{alerted text}{fg=blue}
+\tikzset{alerton/.code args={<#1>}{%
+  \only<#1>{\pgfkeysalso{alert}} % \pgfkeysalso doesn't change the path
+}}
+
+%% utils for removing uninteresting sections from the navbar
+%% https://tex.stackexchange.com/questions/317774/hide-section-from-sidebar
+\makeatletter
+\let\beamer@writeslidentry@miniframeson=\beamer@writeslidentry%
+\def\beamer@writeslidentry@miniframesoff{%
+  \expandafter\beamer@ifempty\expandafter{\beamer@framestartpage}{}% does not happen normally
+  {%else
+    % removed \addtocontents commands
+    \clearpage\beamer@notesactions%
+  }
+}
+\newcommand*{\miniframeson}{\let\beamer@writeslidentry=\beamer@writeslidentry@miniframeson}
+\newcommand*{\miniframesoff}{\let\beamer@writeslidentry=\beamer@writeslidentry@miniframesoff}
+\makeatother
+
+% \hypersetup{
+%     colorlinks=true,
+%     linkcolor=blue,
+%     urlcolor=cyan,
+% }
+
+%% preamble
+\title{BB84}
+\subtitle{Quantum \emph{Protected} Cryptography}
+\author{A.C.}
+\date{\today}
+
+\AtBeginSection[]
+{
+  \miniframesoff
+  \begin{frame}{Outline}
+  \tableofcontents
+  \end{frame}
+  \miniframeson
+}
+
+\definecolor{darkred}{rgb}{0.7,0,0}
+\definecolor{darkgreen}{rgb}{0,0.5,0}
+\definecolor{darkblue}{rgb}{0,0,0.5}
+\definecolor{darkpurple}{rgb}{0.4, 0.0, 0.4}
+
+%% Code font settings
+\lstset{
+  showstringspaces=false,
+  basicstyle=\scriptsize\ttfamily,
+  commentstyle=\color{darkred},
+  stringstyle=\color{darkgreen},
+  keywordstyle=\bfseries\color{darkpurple},
+}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Start of Actual slides %
+%%%%%%%%%%%%%%%%%%%%%%%%%%
+\begin{document}
+\begin{frame}
+  \titlepage
+\end{frame}
+
+\section{Textbook BB84}
+\subsection{Quantum Optics Refresher}
+\begin{frame}{EM Waves}
+  \begin{itemize}
+  \item Light is paired waves in electric and magnetic fields
+  \item General wave equation \[\nabla^2\Psi = \frac{\partial^2\Psi}{\partial t} \]
+  \item Maxwell's equations
+    \[ \oint_A E dA = \oint_A B dA = 0 \]
+    \[ \oint_C E dl = - \int_A \frac{\partial B}{\partial t} dA\]
+    \[ \oint_C B dl = \mu_0 \epsilon \int_A \frac{\partial E}{\partial t} dA \]
+  \end{itemize}
+\end{frame}
+\begin{frame}{Linearly Polarized Light}
+  \begin{itemize}
+  \item Useful simplified model: assume harmonic, planar waves.
+    \begin{itemize}
+    \item Between Fourier transforms and other superpositions this covers a
+      surprising amount of ground.
+    \end{itemize}
+    % TODO: add picture
+  \item We'll refer to the orientation of the E-wave's plane as the wave's \emph{polarization}
+  \end{itemize}
+\end{frame}
+\begin{frame}{Polarizers}
+  \begin{itemize}
+  \item It is possible to create materials which filter light according to its
+    polarization
+  \item All light passing through a polarizer
+  \item Ideal polarizers follow Malus's law \[ I = I_0 cos^2 \theta \]
+    % TODO: Add an polarizer diagram here.
+  % \item parallel: $I = I_0$
+  % \item orthogonal: $I = 0$
+  % \item unpolarized: $I = I_0 \cdot \frac{1}{2\pi} \cdot \int_0^{2\pi} cos^2\theta d\theta = \frac{1}{2}I_0$
+  \end{itemize}
+\end{frame}
+\begin{frame}{Quantizing}
+  \begin{itemize}
+  \item EM radiation is transmitted in quanta called \emph{photons}
+  \item Still have a polarization due to their wave aspect
+    \begin{itemize}
+    \item or possibly a superposition of different polarizations \ldots
+    \end{itemize}
+  \item Cannot be dimmed -- quanta are indivisible.
+  \item Instead polarizers absorb with probability $\sin^2\theta$
+    \begin{itemize}
+    \item or transmit with probability $\cos^2\theta$
+    \end{itemize}
+  \end{itemize}
+\end{frame}
+\begin{frame}{No Cloning Theorem}
+  \begin{itemize}
+  \item Observing a quantum entity, including photons, collapses it into a
+    single state.
+  \item Impossible to perfectly capture and reconstruct a photon of
+    unknown polarization
+    \begin{itemize}
+    \item Approximate cloning \emph{is} possible, e.g. via stimulated emission
+    \item General upper bound on cloning fidelity of $\frac{5}{6}$
+    \item Fidelity bound for the case we'll care about of $\approx 0.8535$
+    \end{itemize}
+  \end{itemize}
+\end{frame}
+
+\subsection{BB84}
+\begin{frame}{Qubit Bases}
+  \begin{itemize}
+  \item Photon measurement is deterministic at $\theta=0$ and $\theta=\frac{\pi}{2}$
+  \item Map vertically aligned light to $|1\rangle$, horizontally to $|0\rangle$
+    \begin{itemize}
+    \item Verticality is purely convention
+    \item Call the decision of which way is up our \emph{measurement basis}
+    \end{itemize}
+  \item What happens if sender and receiver use different bases?
+    \begin{itemize}
+    \item i.e., there's a phase offset of $\phi$ between their verticals
+    \end{itemize}
+  \item Bit flip with probability $\sin^2 \phi$, by Malus' law. 
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{The Protocol}
+  \begin{enumerate}
+  \item Alice and Bob publicly agree on two bases (red, blue) with a
+    $\frac{\pi}{4}$ offset between them
+  \item Alice creates a random sequence of bits
+  \item Alice randomly red- or blue-encodes each bit, transmits to Bob
+  \item Bob randomly red- or blue-decodes each photon
+  \item Alice and Bob publicly announce their basis choices, drop bits where
+their bases disagree.
+  \item Alice and Bob publicly compare a random subset of the undropped bits.
+  \item If they observe a high rate of corruption, they start over.
+  \item Otherwise, the undropped and unannounced bits are now a shared secret.
+  \end{enumerate}
+\end{frame}
+
+\begin{frame}{The Protocol}
+  % TODO: tikz sequence showing Alice and Bob walking through BB84.
+\end{frame}
+
+\begin{frame}{BB84 Intuition}
+  \begin{itemize}
+  \item Red and blue bases chosen to maximize corruption
+    \begin{itemize}
+    \item Decoding in the wrong basis yields a $50\%$ chance of corruption.
+    \end{itemize}
+  \item If Eve intercepts a photon and forwards it on to Bob, she'll likely
+    corrupt it.
+    \begin{itemize}
+    \item $50\%$ chance she's in the wrong basis
+    \item $50\%$ chance of corruption from mis-encoding.
+    \item $25\%$ Bob gets a corrupted bit (assuming no intelligent cloning).
+    \end{itemize}
+  \item Can't stop Eve, but can \emph{detect} her.
+  \end{itemize}
+\end{frame}
+
+\section{Textbook to Production}
+\subsection{Error Correction}
+\begin{frame}{Benign QBER}
+  \begin{itemize}
+  \item Sending and receiving individual quanta is \emph{hard}
+  \item Even if Eve isn't interfering, some of our bits will be scrambled.
+  \item Secrets which are mostly the same are not nearly as useful as secrets which are
+    exactly the same.
+  \item We need to somehow rectify the differences between what Alice sent and
+    Bob measured.
+  \end{itemize}
+\end{frame}
+
+% TODO
+\begin{frame}{Hamming SECDED}
+  
+\end{frame}
+
+\begin{frame}{Winnow}
+  
+\end{frame}
+
+\subsection{Privacy Amplification}
+\begin{frame}{Bit Leakage}
+  \begin{itemize}
+  \item Real systems have some amount of legitimate error
+  \item Paranoia requires that we treat all errors as due to eavesdropping
+  \item \emph{Eve is allowed to have partial information on our secret!}
+    \begin{itemize}
+    \item Or we can just never succeed in negotiating a secret
+    \end{itemize}
+  \item Need to do two things
+    \begin{itemize}
+    \item Estimate how many bits of information Eve has
+    \item Somehow scrub those bits out of our secret
+    \end{itemize}
+  \end{itemize}
+\end{frame}
+\begin{frame}{Parameter Estimation I}
+  \begin{itemize}
+  \item Whenever Eve performs an intercept/resend, she risks creating an error
+    \begin{itemize}
+    \item $\text{QBER} \sim \frac{1}{n} \cdot \text{Bin}(n, p)$
+    \item Theoretical bound of $2 \sqrt{2}$ bits of information per bit flipped (in the long run)
+    \item If we can estimate $p$ we can determine how many bits Eve has
+    \end{itemize}
+  \item Estimate $\hat{p} = \text{QBER}$?
+    \begin{itemize}
+    \item Too easy to have $\hat{p} < p$
+    \end{itemize}
+  \item Bayes rule to pick $\hat{p}$ s.t. $P(p > \hat{p} | \text{QBER}) < \epsilon$?
+    \begin{itemize}
+    \item No sensible prior to put on $p$
+    \end{itemize}
+  \end{itemize}
+\end{frame}
+\begin{frame}{Parameter Estimation II}
+  \begin{itemize}
+  \item Treat $M$, our bits to scrub, as an random variable $f(X)$
+  \item If $P(M < 2\sqrt{2} \cdot p) < \epsilon$, we win
+    \begin{itemize}
+    \item Sounds an awful lot like a confidence interval
+    \end{itemize}
+  \item Calculating CIs for a binomial distribution on the can be cumbersome
+    \begin{itemize}
+    \item Common to pick $m$, $p_\text{crit}$ in advance
+    \item Always trim off $m$ bits, bail if $QBER > p_\text{crit}$
+    \end{itemize}
+  \end{itemize}
+\end{frame}
+\begin{frame}{Mopping up the Leak}
+  \begin{itemize}
+  \item Soooo, can we just hash our secret from $n$ bits down to $m$?
+  \item Yes, if we:
+    \begin{itemize}
+    \item use a universal hash family
+    \item trim an additional $2 \log \left( \frac{1}{\epsilon} \right)$ bits
+    \item choose our hash function randomly, although it \emph{can} be public
+    \end{itemize}
+  \item This is a direct result of the
+    \underline{\href{https://www.cs.bu.edu/~reyzin/teaching/s11cs937/notes-leo-1.pdf}{leftover
+        hash lemma}}
+  \item Approach is obvious:
+    \begin{enumerate}
+    \item Alice publicly announces a random seed
+    \item Alice and Bob both use the seed to hash their secrets down
+    \end{enumerate}
+  \end{itemize}
+\end{frame}
+
+\subsection{Authentication}
+\begin{frame}{MITM}
+  \begin{itemize}
+  \item Trivial attack: Eve plops herself between Alice and Bob
+  \item Alice and Bob wind up with different secrets, but Eve knows
+    both and they only ever talk to her.
+  \item Need some sort of authentication scheme
+    \begin{itemize}
+    \item Impossible without some sort of bootstrap secret!
+    \item But we can still use the scheme to stretch the bootstrap secret,
+      e.g. to allow for one-time pads in the data plane.
+    \end{itemize}
+  \item Our goal is unconditional security, so a standard HMAC won't cut it.
+  \end{itemize}
+\end{frame}
+\begin{frame}{One Time MAC}
+  \begin{enumerate}
+  \item Use $l$ bits of bootstrap secret to choose a member of a universal hash
+    family.
+  \item Hash the message to authenticated into an $m$-bit message tag.
+  \item Encrypt the tag with a one-time pad.
+  \item Discard the $m$ bits used for the OTP.
+  \end{enumerate}
+\end{frame}
+\begin{frame}{One Time MAC Intuitions}
+  \begin{itemize}
+  \item Eve can't manufacture a hash for a fraudulent message, doesn't know
+    the hash function.
+  \item The hash value is encrypted, so she can't manufacture a hash collision.
+    \begin{itemize}
+    \item Universal hash function means she can't even make intelligent guesses
+      about the hash value.
+    \end{itemize}
+  \item Best she can do is guess the tag
+    \begin{itemize}
+    \item Succeeds with probability $\frac{1}{2^m}$
+    \item Places a tradeoff between key expenditure and probability that Eve
+      gets lucky.
+    \end{itemize}
+  \end{itemize}
+\end{frame}
+
+\subsection{Photon Number Splitting}
+\begin{frame}{PNS}
+  \begin{itemize}
+  \item Emitting a single photon is bloody hard
+  \item Most experimental setups work by dimming a laser pulse down to
+    $\approx 1$ photon
+    \begin{itemize}
+    \item Possible for a pulse to include multiple photons.
+    \end{itemize}
+  \item Eve could sniff multi-photon pulses without corrupting them
+  \item Can also block single-photon pulses to stop Alice/Bob from using them
+    in the secret.
+    \begin{itemize}
+    \item Bob expects a lot of transmissions to get lost, this won't necessarily
+      set off alarm bells
+    \end{itemize}
+  \item Attack is commonly known as photon number splitting
+  \end{itemize}
+\end{frame}
+\begin{frame}{Decoy States}
+  \begin{itemize}
+  \item Alice uses two (or more) signal sources $S$ and $S'$
+    \begin{itemize}
+    \item $S$ is the real photon source, averages $\mu$ photons per pulse
+    \item $S'$ is a decoy, with $\mu' > \mu$
+    \item Upshot: $S$ sends more single photon pulses than $S'$
+    \end{itemize}
+  \item Impossible for Eve to tell from the number of photons in a pulse whether
+    it came from $S$ or $S'$
+  \item By blocking single photon pulses, Eve will affect the transmission rate
+    for $S$ more than for $S'$.
+  \item Alice and Bob can compare empirical transmission loss for $S$ and $S'$
+    at the end.
+    \begin{itemize}
+    \item If they differ, they conclude Eve did something naughty.
+    \end{itemize}
+  \end{itemize}
+\end{frame}
+
+%% Q&A and Further reading.
+\miniframesoff
+\section*{}
+\begin{frame}{TL;DR}
+  % TODO
+\end{frame}
+
+\begin{frame}{References and Additional Materials}
+  \begin{itemize}
+  \item Presentation source:
+    \url{https://github.com/alan-christopher/edu/BB84}.
+  \item Quantum Cryptography Intro: \url{https://arxiv.org/abs/1002.1237}
+  \item Quantum Cloning: \url{https://arxiv.org/abs/quant-ph/0511088}
+  \item Privacy Amplification: \url{https://link.springer.com/article/10.1007/BF00191318}
+  \item Winnow: \url{}
+  \item Cascade: \url{}
+  \item LDPC: \url{}
+  \item Decoy states: \url{https://arxiv.org/abs/quant-ph/0211153} % \url{https://arxiv.org/abs/quant-ph/0411004}
+  \item A QKD implementation: \url{https://arxiv.org/abs/1603.08387}
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Questions?}
+\end{frame}
+\end{document}
