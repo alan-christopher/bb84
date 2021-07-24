@@ -8,6 +8,7 @@ import (
 	"github.com/alan-christopher/bb84/go/bb84/bitarray"
 	"github.com/alan-christopher/bb84/go/bb84/photon"
 	"github.com/alan-christopher/bb84/go/generated/bb84pb"
+	"gonum.org/v1/gonum/stat/distuv"
 )
 
 // An alice represents the first BB84 participant.
@@ -238,18 +239,19 @@ func (b *bob) receiveSeed(s *Stats) (bitarray.Dense, error) {
 
 // calcMaxEveInfo returns a theoretical bound on the number of bits of
 // information that Eve could have discerned from a quantum communication
-// consisting of n qbits for which an error rate of qber was observed.
+// consisting of n qbits for which an error rate of qber was observed on a
+// sample of k qbits.
 //
 // See also, https://link.springer.com/article/10.1007/BF00191318
 func calcMaxEveInfo(qber, eps float64, n, k int) float64 {
 	// TODO: account for possible beam-splitting leakage.
-
-	// See https://arxiv.org/abs/1506.08458, lemma 6.
-	A := float64(n*k*k) / float64((n+k)*(k+1))
-	nu := math.Sqrt(0.5 * math.Log(1/eps) / A)
-	qberPessimistic := qber + nu
-
-	// See https://link.springer.com/article/10.1007/BF00191318.
+	// TODO: There are more robust ways of getting CIs for a binomial than a
+	//   straight binomial approximation, as we're doing here
+	//   (https://en.wikipedia.org/wiki/Binomial_proportion_confidence_interval),
+	//   but this is what they do in the springer link, so good enough for now,
+	//   I guess.
+	N := distuv.Normal{Mu: qber * float64(n), Sigma: math.Sqrt(float64(n) * qber * (1 - qber) / float64(k))}
+	qberPessimistic := N.Quantile(1-eps) / float64(n)
 	return 2 * math.Sqrt(2) * qberPessimistic * float64(n)
 }
 
