@@ -155,7 +155,7 @@
     \begin{itemize}
     \item i.e., there's a phase offset of $\phi$ between their verticals
     \end{itemize}
-  \item Bit flip with probability $\sin^2 \phi$, by Malus' law. 
+  \item Bit flip with probability $\sin^2 \phi$, by Malus' law.
   \end{itemize}
 \end{frame}
 
@@ -174,8 +174,90 @@ their bases disagree.
   \end{enumerate}
 \end{frame}
 
-\begin{frame}{The Protocol}
-  % TODO: tikz sequence showing Alice and Bob walking through BB84.
+\begin{frame}{Protocol in Pictures}
+  \begin{center}
+    \begin{tikzpicture}[thick,auto,->,minimum size=16pt]
+      \uncover<1->{
+        \node (a0)[draw=black,fill=blue!30] {0};
+        \node[right = 0pt of a0] (a1)[draw=black,fill=red!30] {0};
+        \node[right = 0pt of a1] (a2)[draw=black,fill=blue!30] {1};
+        \node[right = 0pt of a2] (a3)[draw=black,fill=blue!30] {1};
+        \node[right = 0pt of a3] (a4)[draw=black,fill=blue!30] {0};
+        \node[right = 0pt of a4] (a5)[draw=black,fill=red!30] {1};
+        \node[right = 0pt of a5] (a6)[draw=black,fill=blue!30] {0};
+        \node[right = 0pt of a6] (a7)[draw=black,fill=red!30] {1};
+
+        \node[left = of a0] (alice) {Alice:};
+      }
+      \uncover<2->{
+        \node[below = of a0] (b0)[draw=black,fill=blue!30] {?};
+        \node[below = of a1] (b1)[draw=black,fill=blue!30] {?};
+        \node[below = of a2] (b2)[draw=black,fill=red!30]  {?};
+        \node[below = of a3] (b3)[draw=black,fill=blue!30] {?};
+        \node[below = of a4] (b4)[draw=black,fill=red!30]  {?};
+        \node[below = of a5] (b5)[draw=black,fill=red!30]  {?};
+        \node[below = of a6] (b6)[draw=black,fill=blue!30] {?};
+        \node[below = of a7] (b7)[draw=black,fill=blue!30] {?};
+
+        \node[left = of b0] (bob) {Bob:};
+      }
+      \uncover<3->{
+        \node[below = of a0] (b0f)[draw=black,fill=blue!30] {0};}
+      \uncover<4->{
+        \node[below = of a1] (b1f)[draw=black,fill=blue!30] {0};}
+      \uncover<5->{
+        \node[below = of a2] (b2f)[draw=black,fill=red!30]  {0};}
+      \uncover<6->{
+        \node[below = of a3] (b3f)[draw=black,fill=blue!30] {1};
+        \node[below = of a4] (b4f)[draw=black,fill=red!30]  {1};
+        \node[below = of a5] (b5f)[draw=black,fill=red!30]  {1};
+        \node[below = of a6] (b6f)[draw=black,fill=blue!30] {0};
+        \node[below = of a7] (b7f)[draw=black,fill=blue!30] {1};}
+      \uncover<7->{
+        \node[right = 0pt of a0] (a1r)[draw=black,fill=gray] {};
+        \node[right = 0pt of a1] (a2r)[draw=black,fill=gray]  {};
+        \node[right = 0pt of a3] (a4r)[draw=black,fill=gray]  {};
+        \node[right = 0pt of a6] (a7r)[draw=black,fill=gray] {};
+        \node[below = of a1] (b1r)[draw=black,fill=gray] {};
+        \node[below = of a2] (b2r)[draw=black,fill=gray]  {};
+        \node[below = of a4] (b4r)[draw=black,fill=gray]  {};
+        \node[below = of a7] (b7r)[draw=black,fill=gray] {};
+      }
+      \uncover<9->{
+        \node[right = 0pt of a2] (a3r)[draw=black,fill=gray]  {};
+        \node[right = 0pt of a5] (a6r)[draw=black,fill=gray] {};
+        \node[below = of a3] (b3r)[draw=black,fill=gray]  {};
+        \node[below = of a6] (b6r)[draw=black,fill=gray] {};
+      }
+
+      \uncover<3>{
+        \path (a0) edge (b0);}
+      \uncover<4>{
+        \path (a1) edge (b1);}
+      \uncover<5>{
+        \path (a2) edge (b2);}
+      \uncover<6>{
+        \path (a3) edge (b3);
+        \path (a4) edge (b4);
+        \path (a5) edge (b5);
+        \path (a6) edge (b6);
+        \path (a7) edge (b7);
+      }
+      \uncover<8>{
+        \path (a3) edge[<->] (b3);
+        \path (a6) edge[<->] (b6);
+      }
+    \end{tikzpicture}
+  \end{center}
+  \vspace{10pt}
+  \only<1>{Alice selects random bits, bases}
+  \only<2>{Bob selects random bases}
+  \only<3>{Bases agree, measurement succeeds}
+  \only<4-5>{Bases disagree, measurement \emph{may} fail}
+  \only<6>{Etc...}
+  \only<7>{Sift out mismatched bases}
+  \only<8>{Sample bits to detect Eve}
+  \only<9>{Redact sampled bits}
 \end{frame}
 
 \begin{frame}{BB84 Intuition}
@@ -210,11 +292,11 @@ their bases disagree.
 
 % TODO
 \begin{frame}{Hamming SECDED}
-  
+
 \end{frame}
 
 \begin{frame}{Winnow}
-  
+
 \end{frame}
 
 \subsection{Privacy Amplification}
@@ -258,7 +340,7 @@ their bases disagree.
     \begin{itemize}
     \item Sounds an awful lot like a confidence interval
     \end{itemize}
-  \item Calculating CIs for a binomial distribution on the can be cumbersome
+  \item Calculating CIs for a binomial distribution on the fly be cumbersome
     \begin{itemize}
     \item Common to pick $m$, $p_\text{crit}$ in advance
     \item Always trim off $m$ bits, bail if $QBER > p_\text{crit}$
