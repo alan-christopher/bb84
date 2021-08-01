@@ -36,12 +36,6 @@
 \newcommand*{\miniframesoff}{\let\beamer@writeslidentry=\beamer@writeslidentry@miniframesoff}
 \makeatother
 
-% \hypersetup{
-%     colorlinks=true,
-%     linkcolor=blue,
-%     urlcolor=cyan,
-% }
-
 %% preamble
 \title{BB84}
 \subtitle{Quantum \emph{Protected} Cryptography}
@@ -97,21 +91,23 @@
     \begin{itemize}
     \item Between Fourier transforms and other superpositions this covers a
       surprising amount of ground.
+    \item Call the orientation of the $E$-wave the light's \emph{polarization}
     \end{itemize}
-    % TODO: add picture
-  \item We'll refer to the orientation of the E-wave's plane as the wave's \emph{polarization}
+    \begin{center}
+      \includegraphics[scale=0.25]{images/EM-Wave.png}
+    \end{center}
   \end{itemize}
 \end{frame}
 \begin{frame}{Polarizers}
   \begin{itemize}
   \item It is possible to create materials which filter light according to its
     polarization
-  \item All light passing through a polarizer
-  \item Ideal polarizers follow Malus's law \[ I = I_0 cos^2 \theta \]
-    % TODO: Add an polarizer diagram here.
-  % \item parallel: $I = I_0$
-  % \item orthogonal: $I = 0$
-  % \item unpolarized: $I = I_0 \cdot \frac{1}{2\pi} \cdot \int_0^{2\pi} cos^2\theta d\theta = \frac{1}{2}I_0$
+  \item All light passing through a polarizer is dimmed according to the
+    alignment of its polarization with the polarizer.
+  \item Ideal polarizers follow Malus's law: $I = I_0 cos^2 \theta$
+    \begin{center}
+      \includegraphics[scale=0.25]{images/Loi_de_malus.png}
+    \end{center}
   \end{itemize}
 \end{frame}
 \begin{frame}{Quantizing}
@@ -286,17 +282,102 @@ their bases disagree.
   \item Secrets which are mostly the same are not nearly as useful as secrets which are
     exactly the same.
   \item We need to somehow rectify the differences between what Alice sent and
-    Bob measured.
+    Bob received.
+  \end{itemize}
+\end{frame}
+\begin{frame}{Single Error Detection}
+  \begin{itemize}
+  \item Start with 4 data bits $d_1,d_2,d_3,d_4$.
+    \begin{itemize}
+    \item How can we detect a lone bit flip?
+    \end{itemize}
+  \item Idea, add parity bit at the end: $p_1 := d_1 \oplus d_2 \oplus d_3 \oplus d_4$
+  \item If we retrieve our code word $(d_1,d_2,d_3,d_4,p_1)^T$ in the future and
+    it has odd parity, at least one bit must have been flipped.
+  \item Can write as a check matrix: \[ H = \begin{pmatrix}
+        1 & 1 & 1 & 1 & 1
+      \end{pmatrix} \]
+  \end{itemize}
+\end{frame}
+\begin{frame}{Single Error Correction}
+  \begin{itemize}
+    \item If we want to correct an error, we need to know \emph{which} bit was
+      flipped.
+    \item Let's add more parity bits, but
+      \begin{itemize}
+      \item Each parity bit will only cover some bits in the code word.
+      \item We'll be careful to make sure that every bit is covered by a unique
+        combination of parity bits
+      \end{itemize}
+    \item Hamming solved this for us in 1950 using powers of two
+      \begin{itemize}
+      \item Code word: $(p_1,p_2,d_1,p_3,d_2,d_3,d_4)^T$
+      \item Check matrix: \[ H = \begin{pmatrix}
+            1 & 0 & 1 & 0 & 1 & 0 & 1 \\
+            0 & 1 & 1 & 0 & 0 & 1 & 1 \\
+            0 & 0 & 0 & 1 & 1 & 1 & 1
+          \end{pmatrix} \]
+      \end{itemize}
+  \end{itemize}
+\end{frame}
+\begin{frame}{Full SECDED}
+  \begin{itemize}
+  \item Glue a total parity bit onto a Hamming SEC scheme
+    \begin{itemize}
+    \item No errors $\implies$ all parity checks report even
+    \item Single error $\implies$ total parity reports odd, SEC parities indicate location
+    \item Double error $\implies$ total parity reports even, SEC parities indicate ``location''
+    \end{itemize}
+  \item Commonly known as Hamming(8,4).
+    \begin{itemize}
+      \item Code word: $(p_1,p_2,d_1,p_3,d_2,d_3,d_4,p_\text{total})^T$
+      \item Check matrix: \[ H = \begin{pmatrix}
+            1 & 0 & 1 & 0 & 1 & 0 & 1 & 0 \\
+            0 & 1 & 1 & 0 & 0 & 1 & 1 & 0 \\
+            0 & 0 & 0 & 1 & 1 & 1 & 1 & 0 \\
+            1 & 1 & 1 & 1 & 1 & 1 & 1 & 1
+          \end{pmatrix} \]
+      \end{itemize}
   \end{itemize}
 \end{frame}
 
-% TODO
-\begin{frame}{Hamming SECDED}
-
+\begin{frame}{Winnow I}
+  \begin{itemize}
+  \item What if we just pretended our sifted qubits were SECDED code words?
+  \item They're not, so if Alice has a block $a$, then $Ha$ will almost always
+    want to ``correct'' something.
+    \begin{itemize}
+    \item And for Bob, $Hb$ will behave similarly
+    \end{itemize}
+  \item What if we compare $Ha$ and $Hb$, have Bob apply SECDED using
+    $Ha \oplus Hb$?
+    \begin{itemize}
+    \item If even errors, do nothing
+    \item If odd errors, probably $d(a, b') = d(a, b) - 1$
+    \end{itemize}
+  \item We can reconcile errors by exchanging Hamming syndromes!
+  \end{itemize}
 \end{frame}
-
-\begin{frame}{Winnow}
-
+\begin{frame}{Winnow II}
+  \begin{enumerate}
+  \item Alice and Bob break their bits into SECDED code words
+  \item Alice and Bob exchange total parity for each codeword
+    \begin{enumerate}
+    \item blocks whose total parities agree are ignored going forward
+    \end{enumerate}
+  \item Alice sends Bob $Ha$ for each remaining block
+  \item Bob applies SEC using $Ha \oplus Hb$
+  \item Alice and Bob discard all announced parity bits
+    \begin{enumerate}
+    \item Keeps Eve from gleaning info from our error correction process.
+    \end{enumerate}
+  \item Alice and Bob shuffle their remaining bits using the same seed.
+    \begin{enumerate}
+    \item Stops an even number of errors from ``sticking'' in a code word.
+    \end{enumerate}
+  \item Go back to (1) until convinced that the probability of surviving errors
+    is negligible.
+  \end{enumerate}
 \end{frame}
 
 \subsection{Privacy Amplification}
@@ -340,7 +421,7 @@ their bases disagree.
     \begin{itemize}
     \item Sounds an awful lot like a confidence interval
     \end{itemize}
-  \item Calculating CIs for a binomial distribution on the fly be cumbersome
+  \item Calculating CIs for a binomial distribution on the fly can be cumbersome
     \begin{itemize}
     \item Common to pick $m$, $p_\text{crit}$ in advance
     \item Always trim off $m$ bits, bail if $QBER > p_\text{crit}$
@@ -452,7 +533,15 @@ their bases disagree.
 \miniframesoff
 \section*{}
 \begin{frame}{TL;DR}
-  % TODO
+  \begin{enumerate}
+  \item Send/receive a stream of quanta in random bases.
+  \item Throw away the bits where bases disagreed.
+  \item Reconcile keys using (adaptations of) standard error correction schemes.
+  \item Hash your keys down according to pessimistic estimates of how much
+    information Eve could have.
+  \item Make sure to authenticate all your messages throughout.
+  \item Profit!
+  \end{enumerate}
 \end{frame}
 
 \begin{frame}{References and Additional Materials}
@@ -462,11 +551,16 @@ their bases disagree.
   \item Quantum Cryptography Intro: \url{https://arxiv.org/abs/1002.1237}
   \item Quantum Cloning: \url{https://arxiv.org/abs/quant-ph/0511088}
   \item Privacy Amplification: \url{https://link.springer.com/article/10.1007/BF00191318}
-  \item Winnow: \url{}
-  \item Cascade: \url{}
-  \item LDPC: \url{}
+  \item Winnow: \url{https://arxiv.org/abs/quant-ph/0203096}
   \item Decoy states: \url{https://arxiv.org/abs/quant-ph/0211153} % \url{https://arxiv.org/abs/quant-ph/0411004}
   \item A QKD implementation: \url{https://arxiv.org/abs/1603.08387}
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Included Works}
+  \begin{itemize}
+  \item \underline{\href{https://commons.wikimedia.org/wiki/File:EM-Wave.gif}{Transverse Wave Image}}
+  \item \underline{\href{https://commons.wikimedia.org/wiki/File:Loi_de_malus.png}{Polarizer Image}}
   \end{itemize}
 \end{frame}
 
