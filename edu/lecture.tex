@@ -156,21 +156,6 @@
 \end{frame}
 
 \begin{frame}{The Protocol}
-  \begin{enumerate}
-  \item Alice and Bob publicly agree on two bases (rect, diag) with a
-    $\frac{\pi}{4}$ offset between them
-  \pause\item Alice creates a random sequence of bits
-  \pause\item Alice randomly rect- or diag-encodes each bit, transmits to Bob
-  \pause\item Bob randomly rect- or diag-decodes each photon
-  \pause\item Alice and Bob publicly announce their basis choices, drop bits where
-their bases disagree.
-  \pause\item Alice and Bob publicly compare a random subset of the undropped bits.
-  \pause\item If they observe a high rate of corruption, they start over.
-  \pause\item Otherwise, the undropped and unannounced bits are now a shared secret.
-  \end{enumerate}
-\end{frame}
-
-\begin{frame}{Protocol in Pictures}
   \begin{center}
     \begin{tikzpicture}[thick,auto,->,minimum size=16pt]
       \uncover<1->{
@@ -254,6 +239,21 @@ their bases disagree.
   \only<7>{Sift out mismatched bases}
   \only<8>{Sample bits to detect Eve}
   \only<9>{Redact sampled bits}
+\end{frame}
+
+\begin{frame}{The Protocol Summary}
+  \begin{enumerate}
+  \item Alice and Bob publicly agree on two bases (rect, diag) with a
+    $\frac{\pi}{4}$ offset between them
+  \item Alice creates a random sequence of bits
+  \item Alice randomly rect- or diag-encodes each bit, transmits to Bob
+  \item Bob randomly rect- or diag-decodes each photon
+  \item Alice and Bob publicly announce their basis choices, drop bits where
+their bases disagree.
+  \item Alice and Bob publicly compare a random subset of the undropped bits.
+  \item If they observe a high rate of corruption, they start over.
+  \item Otherwise, the undropped and unannounced bits are now a shared secret.
+  \end{enumerate}
 \end{frame}
 
 \begin{frame}{BB84 Intuition}
@@ -349,12 +349,12 @@ their bases disagree.
     \begin{itemize}
     \item And for Bob, $Hb$ will behave similarly
     \end{itemize}
-  \pause\item $a \oplus b \approx 0 \implies H(a \oplus b) = Ha \oplus Hb \approx 0$
   \pause\item What if we compare $Ha$ and $Hb$, have Bob apply SECDED using
     $Ha \oplus Hb$?
     \begin{itemize}
-    \item If even errors, do nothing
-    \item If odd errors, probably $d(a, b') = d(a, b) - 1$
+    \item $a \oplus b \approx 0$, 0 is a valid code word
+    \item $Ha \oplus Hb = H(a \oplus b)$
+    \item Flipping a bit in $b$ flips the same bit in $a \oplus b$
     \end{itemize}
   \pause\item We can reconcile errors by exchanging Hamming syndromes!
   \end{itemize}
@@ -417,21 +417,22 @@ their bases disagree.
 \end{frame}
 \begin{frame}{Parameter Estimation II}
   \begin{itemize}
-  \item Treat $M$, our bits to scrub, as an random variable $f(X)$
+  \item Treat $M$, our bits to scrub, as a random variable $f(\text{QBER})$
   \pause\item If $P(M < 2\sqrt{2} \cdot p) < \epsilon$, we win
     \begin{itemize}
     \item Sounds an awful lot like a confidence interval
     \end{itemize}
-  \pause\item Calculating CIs for a binomial distribution on the fly can be cumbersome
+  \pause\item Exact CIs for binomials are computationally expensive
     \begin{itemize}
-    \item Common to pick $m$, $p_\text{crit}$ in advance
-    \item Always trim off $m$ bits, bail if $QBER > p_\text{crit}$
+    \item Almost always approximated using Poisson or Normal
+    \item Much of the literature focuses on methods that provide exact bounds,
+      not estimates
     \end{itemize}
   \end{itemize}
 \end{frame}
 \begin{frame}{Mopping up the Leak}
   \begin{itemize}
-  \item Soooo, can we just hash our secret from $n$ bits down to $m$?
+  \item Soooo, can we just hash our secret from $n$ bits down to $n-m$?
   \pause\item Yes, if we:
     \begin{itemize}
     \item use a universal hash family
