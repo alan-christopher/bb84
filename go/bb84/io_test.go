@@ -6,7 +6,7 @@ import (
 	"net"
 	"testing"
 
-	"github.com/alan-christopher/bb84/go/bb84/bitarray"
+	"github.com/alan-christopher/bb84/go/bb84/bitmap"
 	"github.com/alan-christopher/bb84/go/generated/bb84pb"
 	"google.golang.org/protobuf/proto"
 )
@@ -20,12 +20,12 @@ func TestSendReceive(t *testing.T) {
 	alice := &protoFramer{
 		rw:     l,
 		secret: bytes.NewBuffer(otp),
-		t:      toeplitz{diags: bitarray.NewDense(diags, -1), m: 40},
+		t:      toeplitz{diags: bitmap.NewDense(diags, -1), m: 40},
 	}
 	bob := &protoFramer{
 		rw:     r,
 		secret: bytes.NewBuffer(otp),
-		t:      toeplitz{diags: bitarray.NewDense(diags, -1), m: 40},
+		t:      toeplitz{diags: bitmap.NewDense(diags, -1), m: 40},
 	}
 	msg := &bb84pb.BasisAnnouncement{
 		Bases: &bb84pb.DenseBitArray{
@@ -68,13 +68,13 @@ func TestMACVerification(t *testing.T) {
 	alice := &protoFramer{
 		rw:     l,
 		secret: bytes.NewBuffer(otp),
-		t:      toeplitz{diags: bitarray.NewDense(diags, -1), m: 40},
+		t:      toeplitz{diags: bitmap.NewDense(diags, -1), m: 40},
 	}
 	bob := &protoFramer{
 		rw: r,
 		// Note: otp2 != otp, so bob's MAC should disagree with alice's
 		secret: bytes.NewBuffer(otp2),
-		t:      toeplitz{diags: bitarray.NewDense(diags, -1), m: 40},
+		t:      toeplitz{diags: bitmap.NewDense(diags, -1), m: 40},
 	}
 	msg := &bb84pb.BasisAnnouncement{
 		Bases: &bb84pb.DenseBitArray{

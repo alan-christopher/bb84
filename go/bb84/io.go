@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/alan-christopher/bb84/go/bb84/bitarray"
+	"github.com/alan-christopher/bb84/go/bb84/bitmap"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -58,7 +58,7 @@ func (p *protoFramer) Read(m proto.Message, s *Stats) error {
 		return err
 	}
 	s.BytesRead += len(marshalled)
-	mac := make([]byte, bitarray.BytesFor(p.t.m))
+	mac := make([]byte, bitmap.BytesFor(p.t.m))
 	if _, err := io.ReadFull(p.rw, mac); err != nil {
 		return err
 	}
@@ -75,16 +75,16 @@ func (p *protoFramer) Read(m proto.Message, s *Stats) error {
 }
 
 func (p *protoFramer) buildMAC(msg []byte) ([]byte, error) {
-	v := bitarray.NewDense(msg, -1)
+	v := bitmap.NewDense(msg, -1)
 	p.t.n = v.Size()
 	hash, err := p.t.Mul(v)
 	if err != nil {
 		return nil, err
 	}
-	otp := make([]byte, hash.ByteSize())
+	otp := make([]byte, hash.SizeBytes())
 	if _, err := p.secret.Read(otp); err != nil {
 		return nil, err
 	}
-	mac := hash.XOr(bitarray.NewDense(otp, -1))
+	mac := bitmap.XOr(hash, bitmap.NewDense(otp, -1))
 	return mac.Data(), nil
 }

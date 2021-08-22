@@ -5,7 +5,7 @@ import (
 	"math/bits"
 	"math/rand"
 
-	"github.com/alan-christopher/bb84/go/bb84/bitarray"
+	"github.com/alan-christopher/bb84/go/bb84/bitmap"
 	"github.com/alan-christopher/bb84/go/generated/bb84pb"
 )
 
@@ -24,9 +24,9 @@ type winnower struct {
 	isAlice bool
 }
 
-func (w winnower) Reconcile(x bitarray.Dense, s *Stats) (reconcileResult, error) {
+func (w winnower) Reconcile(x bitmap.Dense, s *Stats) (reconcileResult, error) {
 	var (
-		xHat bitarray.Dense = x
+		xHat bitmap.Dense = x
 		err  error
 	)
 	for _, hBits := range w.iters {
@@ -38,19 +38,19 @@ func (w winnower) Reconcile(x bitarray.Dense, s *Stats) (reconcileResult, error)
 	return reconcileResult{xHat: xHat}, nil
 }
 
-func (w winnower) winnow(x bitarray.Dense, hBits int, s *Stats) (bitarray.Dense, error) {
+func (w winnower) winnow(x bitmap.Dense, hBits int, s *Stats) (bitmap.Dense, error) {
 	x.Shuffle(w.rand)
 	syndromes, err := w.getSyndromes(x, hBits)
 	if err != nil {
-		return bitarray.Empty(), err
+		return bitmap.Empty(), err
 	}
 	todo, err := w.exchangeTotalParity(syndromes, hBits, s)
 	if err != nil {
-		return bitarray.Empty(), err
+		return bitmap.Empty(), err
 	}
 	synSums, err := w.exchangeFullSyndromes(syndromes, todo, hBits, s)
 	if err != nil {
-		return bitarray.Empty(), err
+		return bitmap.Empty(), err
 	}
 	w.applySyndromes(&x, synSums, todo, hBits)
 	x = w.maintainPrivacy(x, todo, hBits)
@@ -58,39 +58,42 @@ func (w winnower) winnow(x bitarray.Dense, hBits int, s *Stats) (bitarray.Dense,
 	return x, nil
 }
 
-func (w winnower) exchangeTotalParity(syndromes []bitarray.Dense, hBits int, s *Stats) (bitarray.Dense, error) {
-	tp := bitarray.Empty()
+func (w winnower) exchangeTotalParity(syndromes []bitmap.Dense, hBits int, s *Stats) (bitmap.Dense, error) {
+	tp := bitmap.Empty()
 	for _, syn := range syndromes {
 		tp.AppendBit(syn.Get(hBits))
 	}
 	tppb := &bb84pb.ParityAnnouncement{}
+	// TODO: alice should be able to provide her total parity information in her
+	//   full syndromes announcement, which reduces the number of messages she
+	//   needs to send considerably.
 	if w.isAlice {
 		if err := w.channel.Write(&bb84pb.ParityAnnouncement{Parities: tp.ToProto()}, s); err != nil {
-			return bitarray.Empty(), nil
+			return bitmap.Empty(), nil
 		}
 		if err := w.channel.Read(tppb, s); err != nil {
-			return bitarray.Empty(), nil
+			return bitmap.Empty(), nil
 		}
 	} else {
 		if err := w.channel.Read(tppb, s); err != nil {
-			return bitarray.Empty(), nil
+			return bitmap.Empty(), nil
 		}
 		if err := w.channel.Write(&bb84pb.ParityAnnouncement{Parities: tp.ToProto()}, s); err != nil {
-			return bitarray.Empty(), nil
+			return bitmap.Empty(), nil
 		}
 	}
-	otherTP := bitarray.DenseFromProto(tppb.Parities)
+	otherTP := bitmap.DenseFromProto(tppb.Parities)
 	if tp.Size() != otherTP.Size() {
-		return bitarray.Empty(), fmt.Errorf(
+		return bitmap.Empty(), fmt.Errorf(
 			"reconciling bitstrings of different block counts: %d != %d", tp.Size(), otherTP.Size())
 	}
 
-	return tp.XOr(otherTP), nil
+	return bitmap.XOr(tp, otherTP), nil
 }
 
 func (w winnower) exchangeFullSyndromes(
-	syndromes []bitarray.Dense, todo bitarray.Dense, hBits int, s *Stats) ([]bitarray.Dense, error) {
-	var filteredSyn []bitarray.Dense
+	syndromes []bitmap.Dense, todo bitmap.Dense, hBits int, s *Stats) ([]bitmap.Dense, error) {
+	var filteredSyn []bitmap.Dense
 	for i, syn := range syndromes {
 		if todo.Get(i) {
 			filteredSyn = append(filteredSyn, syn)
@@ -112,16 +115,16 @@ func (w winnower) exchangeFullSyndromes(
 		return nil, fmt.Errorf(
 			"reconciling syndromes of different block counts: %d != %d", len(filteredSyn), len(synpb.Syndromes))
 	}
-	var r []bitarray.Dense
+	var r []bitmap.Dense
 	for i, syn := range filteredSyn {
-		oSyn := bitarray.DenseFromProto(synpb.Syndromes[i])
-		r = append(r, syn.XOr(oSyn))
+		oSyn := bitmap.DenseFromProto(synpb.Syndromes[i])
+		r = append(r, bitmap.XOr(syn, oSyn))
 	}
 
 	return r, nil
 }
 
-func (w winnower) applySyndromes(x *bitarray.Dense, synSums []bitarray.Dense, todo bitarray.Dense, hBits int) error {
+func (w winnower) applySyndromes(x *bitmap.Dense, synSums []bitmap.Dense, todo bitmap.Dense, hBits int) error {
 	if w.isAlice {
 		// Alice announces, Bob fixes.
 		return nil
@@ -144,18 +147,13 @@ func (w winnower) applySyndromes(x *bitarray.Dense, synSums []bitarray.Dense, to
 			pos = n - 1 // total parity flip
 		}
 		idx := i*n + pos
-		// if idx >= x.Size() {
-		// 	continue // trying to flip an illusory padding bit.
-		// }
-		if err := x.Set(idx, !x.Get(idx)); err != nil {
-			return err
-		}
+		x.Flip(idx)
 	}
 	return nil
 }
 
-func (w winnower) maintainPrivacy(x bitarray.Dense, todo bitarray.Dense, hBits int) bitarray.Dense {
-	keep := bitarray.Empty()
+func (w winnower) maintainPrivacy(x bitmap.Dense, todo bitmap.Dense, hBits int) bitmap.Dense {
+	keep := bitmap.Empty()
 	n := 1 << hBits
 	for i := 0; i < todo.Size(); i++ {
 		if !todo.Get(i) {
@@ -170,19 +168,19 @@ func (w winnower) maintainPrivacy(x bitarray.Dense, todo bitarray.Dense, hBits i
 			keep.AppendBit(bits.OnesCount(uint(j+1)) != 1)
 		}
 	}
-	return x.Select(keep)
+	return bitmap.Select(x, keep)
 }
 
-func (w winnower) getSyndromes(x bitarray.Dense, hBits int) ([]bitarray.Dense, error) {
-	var r []bitarray.Dense
+func (w winnower) getSyndromes(x bitmap.Dense, hBits int) ([]bitmap.Dense, error) {
+	var r []bitmap.Dense
 	bSize := 1 << hBits
 	for i := 0; i < x.Size(); i += bSize {
-		block, err := x.Slice(i, min(i+bSize, x.Size()))
+		block, err := bitmap.Slice(x, i, min(i+bSize, x.Size()))
 		if err != nil {
 			return nil, err
 		}
 		if i+bSize > x.Size() {
-			block = bitarray.NewDense(block.Data(), bSize)
+			block = bitmap.NewDense(block.Data(), bSize)
 		}
 		syndrome, err := w.secded(block, hBits)
 		if err != nil {
@@ -193,12 +191,12 @@ func (w winnower) getSyndromes(x bitarray.Dense, hBits int) ([]bitarray.Dense, e
 	return r, nil
 }
 
-func (w winnower) secded(block bitarray.Dense, hBits int) (bitarray.Dense, error) {
+func (w winnower) secded(block bitmap.Dense, hBits int) (bitmap.Dense, error) {
 	if block.Size() != 1<<hBits {
-		return bitarray.Empty(), fmt.Errorf(
+		return bitmap.Empty(), fmt.Errorf(
 			"hamming SECDED with %d parity bits needs block of %d, got %d", hBits, 1<<hBits, block.Size())
 	}
-	r := bitarray.Empty()
+	r := bitmap.Empty()
 
 	// The p-th hamming parity bit checks the parity of bits in strides of 2^p. E.g.
 	// the 0th bit checks positions {0, 2, 4, ...}, the 1st checks
@@ -215,7 +213,7 @@ func (w winnower) secded(block bitarray.Dense, hBits int) (bitarray.Dense, error
 	}
 
 	// Finish by inserting a total parity bit.
-	r.AppendBit(block.Parity())
+	r.AppendBit(bitmap.Parity(block))
 
 	return r, nil
 }

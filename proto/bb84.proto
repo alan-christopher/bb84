@@ -9,25 +9,33 @@ message DenseBitArray {
 	int32 len = 2;
 }
 
+message SparseBitArray {
+	repeated int32 indices = 1;
+	int32 len = 2;
+}
+
 message BasisAnnouncement {
 	// Specifies which bases a sequence of photons was (en|de)coded in.
 	DenseBitArray bases = 1;
 	// Specifies which pulses in a photon-sequence were lost.
 	DenseBitArray dropped = 2;
+	// Specifies the values measured in the Z, or test, basis.
+	DenseBitArray test_bits = 3;
+	// Specifies which photons were sent on weak pulses.
+	DenseBitArray lo = 4;
+	// Specifies which photons were sent on medium pulses.
+	DenseBitArray med = 5;
+	// Specifies which photons were sent on strong pulses.
+	DenseBitArray hi = 6;
 }
 
-message BitAnnouncement {
-	// Specifies the values of the bits (en|de)coded on the quantum channel.
-	DenseBitArray bits = 1;
-	// Specifies the seed to use for shuffling the bitarray before sampling.
-	int64 shuffle_seed = 2;
+message HashAnnouncement {
+	// The seed used when to choose the function from the hash family to create
+	// the hash.
+	bytes seed = 1;
+	// The result of hashing our secret.
+	bytes hash = 2;
 }
-
-message QBERAnnouncement {
-	// The empirically estimated quantum bit error rate.
-	double qber = 1;
-}
-
 message ParityAnnouncement {
 	// The total parities of each of the code blocks which comprise the key
 	// being negotiated.
@@ -42,7 +50,11 @@ message SyndromeAnnouncement {
 	repeated DenseBitArray syndromes = 1;
 }
 
-message SeedAnnouncement {
-	// A randomly generated seed for use in, e.g., randomness extraction.
-	bytes seed = 1;
+message ErrorCorrectionFinished {
+	// A randomly generated seed to use in key extraction (aka privacy amplification).
+	bytes extract_seed = 1;
+	// A randomly generated seed for use to pick a hash for error correction verification.
+	bytes verify_seed = 2;
+	// The result of hashing our error-corrected, but unextracted, key.
+	DenseBitArray verify_hash = 3;
 }
